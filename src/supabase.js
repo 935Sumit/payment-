@@ -6,11 +6,18 @@ const CONFIG_KEYS = {
   lastSync: 'pv_last_cloud_sync'
 };
 
+const DEFAULT_SUPABASE_URL = '[REDACTED_SUPABASE_URL]';
+const DEFAULT_SUPABASE_ANON_KEY = '[REDACTED_SUPABASE_KEY]';
+
 let clientInstance = null;
 
 export function getSupabaseConfig() {
-  const url = localStorage.getItem(CONFIG_KEYS.url) || (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_SUPABASE_URL : '') || '';
-  const anonKey = localStorage.getItem(CONFIG_KEYS.anonKey) || (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_SUPABASE_ANON_KEY : '') || '';
+  const url = localStorage.getItem(CONFIG_KEYS.url) || 
+              (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL ? import.meta.env.VITE_SUPABASE_URL : '') || 
+              DEFAULT_SUPABASE_URL;
+  const anonKey = localStorage.getItem(CONFIG_KEYS.anonKey) || 
+                  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY ? import.meta.env.VITE_SUPABASE_ANON_KEY : '') || 
+                  DEFAULT_SUPABASE_ANON_KEY;
   return { url: url.trim(), anonKey: anonKey.trim() };
 }
 
