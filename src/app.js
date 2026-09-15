@@ -375,7 +375,7 @@ function render() {
       <header class="mobile-topbar">
         <div class="mobile-brand">
           <span class="mobile-seal">⛁</span>
-          <span class="mobile-title">Voucher Book</span>
+          <span class="mobile-title">Payment</span>
         </div>
         <div class="mobile-status-pill">
           <span class="dot"></span>
@@ -411,8 +411,8 @@ function renderRail() {
   return `
     <nav class="rail">
       <div class="rail-brand">
-        <div class="mark"><span class="seal">⛁</span> Voucher Book</div>
-        <div class="tagline">Combined Cheque Sheets</div>
+        <div class="mark"><span class="seal">⛁</span> Payment</div>
+        <div class="tagline">Bank Payments</div>
       </div>
       <div class="rail-nav">
         ${links.map(l => `
@@ -424,8 +424,7 @@ function renderRail() {
         `).join('')}
       </div>
       <div class="rail-foot">
-        Secure Offline & Cloud Storage<br>
-        All transactions synchronized.
+        Secure Storage · Bank Payments
       </div>
     </nav>
   `;
@@ -570,8 +569,7 @@ function renderDashboard() {
   return `
     <div class="page-head">
       <div>
-        <h1>Financial Dashboard</h1>
-        <p class="sub">Live overview of cheque disbursements, party volumes, and bank outflows.</p>
+        <h1>Dashboard</h1>
       </div>
       <div class="head-actions desktop-only">
         <button class="btn btn-accent" data-action="goto-newrun">${ICONS.plus} New Payment Run</button>
@@ -848,7 +846,6 @@ function renderDirectory() {
     <div class="page-head">
       <div>
         <h1>Party Directory</h1>
-        <p class="sub">Organize payee bank details into separate sections (Material Bills, Employees, Contractors, Utilities), import lists, and export vouchers.</p>
       </div>
       <div class="head-actions">
         <button class="btn btn-ghost" data-action="open-backup-modal">Backup / Restore</button>
@@ -1063,7 +1060,6 @@ function renderNewRun() {
     <div class="page-head">
       <div>
         <h1>New Payment Run</h1>
-        <p class="sub">Select payees by section, input cheque amounts, and build your custom banking voucher.</p>
       </div>
       <div style="display:flex; gap:12px;">
         ${isEditing ? `<button class="btn btn-ghost" data-action="cancel-editing-run">Cancel Edit</button>` : ''}
@@ -1396,7 +1392,6 @@ function renderHistory() {
     <div class="page-head">
       <div>
         <h1>History Logs</h1>
-        <p class="sub">Revisit, review, and re-download previously generated combined payment sheets. Click any row to view details.</p>
       </div>
       <div class="head-actions">
         <button class="btn btn-ghost" data-action="open-export-monthly-modal" style="border: 1px solid var(--border); margin-right: 8px;">${ICONS.download} Export Month Report</button>
@@ -1534,7 +1529,6 @@ function renderAccounts() {
     <div class="page-head">
       <div>
         <h1>My Accounts</h1>
-        <p class="sub">Manage the bank accounts you write cheques from and track their chequebook series.</p>
       </div>
       <button class="btn btn-primary" data-action="open-account-form">${ICONS.plus} Add Account</button>
     </div>
@@ -3887,7 +3881,7 @@ function exportBackupJSON() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Voucher-Book-Backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.download = `Payment-Backup-${new Date().toISOString().slice(0,10)}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
