@@ -33,9 +33,20 @@
 html, body {
   margin: 0;
   padding: 0;
+  width: 100%;
+  max-width: 100vw;
   min-height: 100vh;
+  overflow-x: hidden;
   background-color: var(--bg);
   color: var(--primary-text);
+  box-sizing: border-box;
+}
+
+#app {
+  width: 100%;
+  max-width: 100vw;
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
 body {
@@ -77,21 +88,27 @@ a:hover {
 /* ===== App Layout Shell ===== */
 .app-shell {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 260px minmax(0, 1fr);
   min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
 }
 
 .rail {
   background: var(--sidebar-bg);
   color: var(--secondary-text);
-  padding: 40px 0 24px;
+  padding: 36px 0 24px;
   display: flex;
   flex-direction: column;
   position: sticky;
   top: 0;
   height: 100vh;
+  width: 260px;
+  box-sizing: border-box;
   border-right: 1px solid var(--border);
   z-index: 10;
+  flex-shrink: 0;
 }
 
 .rail-brand {
@@ -129,7 +146,7 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 0 16px;
+  padding: 0 14px;
 }
 
 .mobile-topbar {
@@ -139,18 +156,19 @@ a:hover {
 .rail-link {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
-  border-radius: 12px;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
   color: var(--secondary-text);
   text-decoration: none;
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   border: none;
   background: transparent;
   text-align: left;
   width: 100%;
+  box-sizing: border-box;
   transition: var(--transition);
 }
 
@@ -163,15 +181,15 @@ a:hover {
 }
 
 .rail-link svg {
-  width: 20px;
-  height: 20px;
+  width: 19px;
+  height: 19px;
   flex-shrink: 0;
-  opacity: 0.6;
+  opacity: 0.65;
   transition: var(--transition);
 }
 
 .rail-link:hover {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(0, 0, 0, 0.04);
   color: var(--primary-text);
 }
 .rail-link:hover svg {
@@ -183,10 +201,9 @@ a:hover {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 600;
-  border-left: 3px solid var(--accent);
-  border-radius: 0 12px 12px 0;
-  margin-left: -16px;
-  padding-left: 31px;
+  border-radius: 10px;
+  margin-left: 0;
+  padding: 12px 14px;
 }
 .rail-link.active svg {
   opacity: 1;
@@ -196,7 +213,7 @@ a:hover {
 
 .rail-foot {
   margin-top: auto;
-  padding: 20px 28px 0;
+  padding: 20px 24px 0;
   border-top: 1px solid var(--border);
   font-size: 11.5px;
   color: hsl(220, 10%, 45%);
@@ -204,10 +221,12 @@ a:hover {
 }
 
 .main {
-  padding: 48px 56px 64px;
-  max-width: 1360px;
+  padding: 32px 36px 48px;
+  max-width: 1280px;
   margin: 0 auto;
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .page-head {
@@ -2576,23 +2595,53 @@ table tbody tr.row-selected {
    Responsive Design (Tablets, iPads & Mobile Phones)
    ========================================================= */
 
-@media (max-width: 1024px) {
+@media (max-width: 1120px) {
   .app-shell {
-    grid-template-columns: 240px 1fr;
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .rail {
+    width: 220px;
+    padding: 28px 0 20px;
+  }
+  .rail-brand {
+    padding: 0 16px 20px;
+    margin-bottom: 20px;
+  }
+  .rail-brand .mark {
+    font-size: 19px;
+  }
+  .rail-brand .mark .seal {
+    font-size: 18px;
+  }
+  .rail-nav {
+    padding: 0 8px;
+  }
+  .rail-link {
+    padding: 10px 12px;
+    font-size: 13px;
+    gap: 10px;
+  }
+  .rail-link svg {
+    width: 17px;
+    height: 17px;
+  }
+  .rail-foot {
+    padding: 14px 16px 0;
+    font-size: 11px;
   }
   .main {
-    padding: 32px 28px 50px;
+    padding: 24px 24px 44px;
   }
   .dashboard-charts-grid {
     grid-template-columns: 1fr;
-    gap: 20px;
+    gap: 16px;
   }
   .excel-meta-section {
-    gap: 32px;
+    gap: 24px;
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   html, body {
     overflow-x: hidden;
     width: 100%;
