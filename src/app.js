@@ -56,8 +56,15 @@ function saveStore(key, data) {
   localStorage.setItem(key, JSON.stringify(data));
 }
 
-let savedRoute = localStorage.getItem(STORE_KEYS.route) || 'directory';
-if (savedRoute === 'database') savedRoute = 'directory';
+const VALID_ROUTES = ['dashboard', 'directory', 'newrun', 'history', 'accounts'];
+
+function getRouteFromHash() {
+  const hash = (window.location.hash || '').replace(/^#\/?/, '').split('?')[0].trim().toLowerCase();
+  return VALID_ROUTES.includes(hash) ? hash : null;
+}
+
+let savedRoute = getRouteFromHash() || localStorage.getItem(STORE_KEYS.route) || 'dashboard';
+if (!VALID_ROUTES.includes(savedRoute)) savedRoute = 'dashboard';
 
 let state = {
   route: savedRoute,
@@ -97,6 +104,72 @@ let state = {
     year: new Date().getFullYear()
   }
 };
+
+function navigateTo(route, pushHistory = true) {
+  if (!VALID_ROUTES.includes(route)) route = 'dashboard';
+  state.route = route;
+  state.modal = null;
+  state.search = '';
+  state.directorySelectedIds = [];
+  
+  if (pushHistory) {
+    if (window.location.hash !== `#/${route}`) {
+      window.location.hash = `#/${route}`;
+    }
+  }
+  render();
+}
+
+function openModal(modalObj, pushHistory = true) {
+  state.modal = modalObj;
+  if (pushHistory) {
+    history.pushState({ isModal: true, route: state.route }, '', `#/${state.route}`);
+  }
+  render();
+}
+
+function closeModal(fromPopState = false) {
+  if (!state.modal) return;
+  state.modal = null;
+  resetQuickAdd();
+  if (!fromPopState && history.state && history.state.isModal) {
+    history.back();
+  } else {
+    render();
+  }
+}
+
+window.addEventListener('popstate', (e) => {
+  // 1. If modal was open, user hit back to close modal
+  if (state.modal) {
+    state.modal = null;
+    resetQuickAdd();
+    render();
+    return;
+  }
+  
+  // 2. Otherwise update route based on hash or event state
+  const hashRoute = getRouteFromHash();
+  const targetRoute = hashRoute || (e.state && e.state.route) || 'dashboard';
+  if (state.route !== targetRoute) {
+    state.route = VALID_ROUTES.includes(targetRoute) ? targetRoute : 'dashboard';
+    state.modal = null;
+    state.search = '';
+    state.directorySelectedIds = [];
+    render();
+  }
+});
+
+window.addEventListener('hashchange', () => {
+  const hashRoute = getRouteFromHash();
+  if (hashRoute && state.route !== hashRoute) {
+    state.route = hashRoute;
+    state.modal = null;
+    state.search = '';
+    state.directorySelectedIds = [];
+    render();
+  }
+});
 
 function uid() {
   return 'id_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -2177,8 +2250,7 @@ function resetQuickAdd() {
 
 function showViewHistoryModal(h, resetForm = true) {
   if (resetForm) resetQuickAdd();
-  state.modal = { type: 'view-history', payload: h };
-  render();
+  openModal({ type: 'view-history', payload: h });
 }
 
 function renderQuickAddSection(h) {
@@ -2777,10 +2849,7 @@ function attachHandlers() {
 
   app.querySelectorAll('[data-route]').forEach(btn => {
     btn.addEventListener('click', () => {
-      state.route = btn.dataset.route;
-      state.search = '';
-      state.directorySelectedIds = [];
-      render();
+      navigateTo(btn.dataset.route);
     });
   });
 
@@ -3231,30 +3300,27 @@ function handleAction(action, el, e) {
 
   switch (action) {
     case 'close-modal':
-      state.modal = null;
-      resetQuickAdd();
-      render();
+      closeModal();
       break;
 
     case 'open-party-form':
-      state.modal = { type: 'party-form', payload: null }; render(); break;
+      openModal({ type: 'party-form', payload: null }); break;
     case 'view-party-history': {
       const name = el.dataset.name;
-      state.modal = { type: 'party-history', payload: name }; render(); break;
+      openModal({ type: 'party-history', payload: name }); break;
     }
     case 'edit-party': {
       const p = state.parties.find(x => x.id === id);
-      state.modal = { type: 'party-form', payload: p }; render(); break;
+      openModal({ type: 'party-form', payload: p }); break;
     }
     case 'delete-party': {
       const p = state.parties.find(x => x.id === id);
-      state.modal = { type: 'confirm-delete-party', payload: p }; render(); break;
+      openModal({ type: 'confirm-delete-party', payload: p }); break;
     }
     case 'delete-party-confirmed':
       removePartiesByIds([id]);
-      state.modal = null;
+      closeModal(true);
       showToast('Payee removed from directory');
-      render();
       break;
 
     case 'toggle-directory-party': {
@@ -3282,8 +3348,7 @@ function handleAction(action, el, e) {
       if (!state.directorySelectedIds.length) return;
       const ids = [...state.directorySelectedIds];
       const names = ids.map(pid => state.parties.find(p => p.id === pid)?.name).filter(Boolean);
-      state.modal = { type: 'confirm-delete-parties-bulk', payload: { ids, names } };
-      render();
+      openModal({ type: 'confirm-delete-parties-bulk', payload: { ids, names } });
       break;
     }
     case 'delete-selected-parties-confirmed': {
@@ -3291,21 +3356,20 @@ function handleAction(action, el, e) {
       if (!ids.length) return;
       const count = ids.length;
       removePartiesByIds(ids);
-      state.modal = null;
+      closeModal(true);
       showToast(`${count} payee${count === 1 ? '' : 's'} removed from directory`);
-      render();
       break;
     }
 
     case 'open-account-form':
-      state.modal = { type: 'account-form', payload: null }; render(); break;
+      openModal({ type: 'account-form', payload: null }); break;
     case 'edit-account': {
       const a = state.myAccounts.find(x => x.id === id);
-      state.modal = { type: 'account-form', payload: a }; render(); break;
+      openModal({ type: 'account-form', payload: a }); break;
     }
     case 'delete-account': {
       const a = state.myAccounts.find(x => x.id === id);
-      state.modal = { type: 'confirm-delete-account', payload: a }; render(); break;
+      openModal({ type: 'confirm-delete-account', payload: a }); break;
     }
     case 'delete-account-confirmed':
       state.myAccounts = state.myAccounts.filter(a => a.id !== id);
@@ -3313,9 +3377,8 @@ function handleAction(action, el, e) {
       if (isSupabaseConfigured()) {
         dbDeleteAccount(id).catch(err => console.warn('Supabase delete account notice:', err));
       }
-      state.modal = null;
+      closeModal(true);
       showToast('Account removed');
-      render();
       break;
 
     case 'toggle-party': {
@@ -3361,15 +3424,14 @@ function handleAction(action, el, e) {
         prefix: state.wordsPrefix,
         editingHistoryId: null
       };
-      state.route = 'history';
-      render();
+      navigateTo('history');
       break;
 
-    case 'goto-directory': state.route = 'directory'; render(); break;
-    case 'goto-newrun': state.route = 'newrun'; render(); break;
-    case 'goto-accounts': state.route = 'accounts'; render(); break;
-    case 'goto-history': state.route = 'history'; render(); break;
-    case 'goto-dashboard': state.route = 'dashboard'; render(); break;
+    case 'goto-directory': navigateTo('directory'); break;
+    case 'goto-newrun': navigateTo('newrun'); break;
+    case 'goto-accounts': navigateTo('accounts'); break;
+    case 'goto-history': navigateTo('history'); break;
+    case 'goto-dashboard': navigateTo('dashboard'); break;
 
     case 'set-directory-category':
       state.directoryCategory = el.dataset.cat;
@@ -3451,9 +3513,8 @@ function handleAction(action, el, e) {
       break;
 
     case 'goto-history-tab':
-      state.modal = null;
-      state.route = 'history';
-      render();
+      closeModal(true);
+      navigateTo('history');
       break;
 
     case 'toggle-quick-add-mode':
@@ -3562,7 +3623,7 @@ function handleAction(action, el, e) {
     }
     case 'delete-history': {
       const h = state.history.find(x => x.id === id);
-      state.modal = { type: 'confirm-delete-history', payload: h }; render(); break;
+      openModal({ type: 'confirm-delete-history', payload: h }); break;
     }
     case 'delete-history-confirmed':
       state.history = state.history.filter(h => h.id !== id);
@@ -3570,9 +3631,8 @@ function handleAction(action, el, e) {
       if (isSupabaseConfigured()) {
         dbDeleteHistory(id).catch(err => console.warn('Supabase delete history notice:', err));
       }
-      state.modal = null;
+      closeModal(true);
       showToast('Log entry removed');
-      render();
       break;
 
     case 'redownload-history': {
@@ -3600,27 +3660,25 @@ function handleAction(action, el, e) {
           prefix: record.prefix || 'INT ',
           editingHistoryId: record.id
         };
-        state.route = 'newrun';
-        state.modal = null;
-        render();
+        closeModal(true);
+        navigateTo('newrun');
         showToast('Loaded run for editing. You can add/remove payees or change amounts.');
       }
       break;
     }
 
     case 'open-import-modal':
-      state.modal = { type: 'import-modal' }; render(); break;
+      openModal({ type: 'import-modal' }); break;
 
     case 'open-backup-modal':
-      state.modal = { type: 'backup-modal' }; render(); break;
+      openModal({ type: 'backup-modal' }); break;
 
     case 'backup-export':
       exportBackupJSON();
       break;
 
     case 'open-export-monthly-modal':
-      state.modal = { type: 'export-monthly-modal' };
-      render();
+      openModal({ type: 'export-monthly-modal' });
       break;
 
     case 'confirm-export-monthly': {
@@ -3639,9 +3697,7 @@ function handleAction(action, el, e) {
         return;
       }
 
-      state.modal = null;
-      render();
-      
+      closeModal(true);
       showToast(`Generating monthly Excel sheet...`);
       exportMonthlyReport(filtered, year, month);
       break;
@@ -3783,11 +3839,10 @@ async function savePaymentRun() {
   // Check for duplicate cheque number in history
   const dupRecord = findDuplicateCheque(state.run.chequeNo, state.run.editingHistoryId);
   if (dupRecord && !state.run.editingHistoryId) {
-    state.modal = {
+    openModal({
       type: 'confirm-duplicate-cheque',
       payload: { record, dupRecord }
-    };
-    render();
+    });
     return;
   }
 
@@ -3818,8 +3873,7 @@ function commitSavePaymentRun(record) {
     editingHistoryId: null
   };
   
-  state.modal = { type: 'run-success', payload: record };
-  render();
+  openModal({ type: 'run-success', payload: record });
 }
 
 function exportBackupJSON() {
