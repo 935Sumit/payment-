@@ -299,6 +299,16 @@ function render() {
   
   app.innerHTML = `
     <div class="app-shell">
+      <header class="mobile-topbar">
+        <div class="mobile-brand">
+          <span class="mobile-seal">⛁</span>
+          <span class="mobile-title">Voucher Book</span>
+        </div>
+        <div class="mobile-status-pill">
+          <span class="dot"></span>
+          <span>${state.parties.length} Parties</span>
+        </div>
+      </header>
       ${renderRail()}
       <div class="main">${renderRoute()}</div>
     </div>
@@ -318,11 +328,11 @@ function render() {
 
 function renderRail() {
   const links = [
-    { key: 'dashboard', label: 'Analytics Dashboard', icon: 'dashboard' },
-    { key: 'directory', label: 'Party Directory', icon: 'directory' },
-    { key: 'newrun', label: 'New Payment Run', icon: 'newrun' },
-    { key: 'history', label: 'History Logs', icon: 'history' },
-    { key: 'accounts', label: 'My Accounts', icon: 'bank' },
+    { key: 'dashboard', label: 'Analytics Dashboard', shortLabel: 'Dashboard', icon: 'dashboard' },
+    { key: 'directory', label: 'Party Directory', shortLabel: 'Parties', icon: 'directory' },
+    { key: 'newrun', label: 'New Payment Run', shortLabel: 'New Run', icon: 'newrun' },
+    { key: 'history', label: 'History Logs', shortLabel: 'History', icon: 'history' },
+    { key: 'accounts', label: 'My Accounts', shortLabel: 'Accounts', icon: 'bank' },
   ];
 
   return `
@@ -334,7 +344,9 @@ function renderRail() {
       <div class="rail-nav">
         ${links.map(l => `
           <button class="rail-link ${state.route === l.key ? 'active' : ''}" data-route="${l.key}">
-            ${ICONS[l.icon]}<span>${l.label}</span>
+            ${ICONS[l.icon]}
+            <span class="rail-link-label">${l.label}</span>
+            <span class="rail-link-short-label">${l.shortLabel}</span>
           </button>
         `).join('')}
       </div>
