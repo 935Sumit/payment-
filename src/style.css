@@ -3731,4 +3731,386 @@ table tbody tr.row-selected {
   }
 }
 
+/* ===== Privacy Mode & Masked Account Numbers ===== */
+.acct-eye-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.acct-digits {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 13px;
+  color: var(--primary-text);
+  letter-spacing: 0.3px;
+}
+
+.acct-digits.is-masked {
+  letter-spacing: 1.2px;
+  color: var(--secondary-text);
+  font-weight: 500;
+}
+
+.icon-btn-eye {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 3px 4px;
+  color: var(--secondary-text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.icon-btn-eye svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.7;
+  transition: all 0.15s ease;
+}
+
+.icon-btn-eye:hover {
+  background: var(--surface-hover);
+  border-color: var(--border);
+  color: var(--primary-text);
+}
+
+.icon-btn-eye:hover svg {
+  opacity: 1;
+}
+
+.icon-btn-eye.unmasked {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.icon-btn-eye.unmasked svg {
+  opacity: 1;
+}
+
+/* ===== Desktop Rail Security Panel ===== */
+.rail-sec-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 14px 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rail-sec-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--secondary-text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: left;
+  width: 100%;
+}
+
+.rail-sec-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.rail-sec-btn:hover {
+  background: var(--surface-hover);
+  color: var(--primary-text);
+  border-color: var(--border-active);
+}
+
+.rail-sec-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(245, 158, 11, 0.3);
+  font-weight: 600;
+}
+
+.rail-sec-btn.active svg {
+  opacity: 1;
+}
+
+.rail-foot-text {
+  font-size: 11px;
+  color: var(--secondary-text);
+  padding: 0 14px;
+}
+
+/* ===== Mobile Topbar Security Actions ===== */
+.mobile-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.topbar-sec-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--secondary-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.topbar-sec-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.topbar-sec-btn:active {
+  transform: scale(0.95);
+}
+
+.topbar-sec-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.topbar-sec-btn.pin-active {
+  color: var(--emerald);
+  background: var(--emerald-soft);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+/* ===== 4-Digit PIN Lock Screen ===== */
+.lock-screen-wrapper {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 10000;
+  background: radial-gradient(circle at 50% 25%, #ffffff 0%, #f1f5f9 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.lock-card {
+  width: 100%;
+  max-width: 340px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 24px;
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.08), 0 0 30px rgba(245, 158, 11, 0.06);
+  padding: 28px 24px 22px;
+  text-align: center;
+  box-sizing: border-box;
+  animation: lockCardAppear 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes lockCardAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.lock-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary-text);
+  margin-bottom: 12px;
+}
+
+.lock-seal {
+  color: var(--accent);
+  font-size: 20px;
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+}
+
+.lock-header {
+  margin-bottom: 20px;
+}
+
+.lock-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary-text);
+  margin: 0 0 4px;
+}
+
+.lock-sub {
+  font-size: 12.5px;
+  color: var(--secondary-text);
+  margin: 0;
+}
+
+/* PIN Dots */
+.pin-dots-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 16px 0 10px;
+  height: 24px;
+}
+
+.pin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: transparent;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pin-dot.filled {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.2);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
+}
+
+.pin-dots-container.shake {
+  animation: pinShake 0.4s ease-in-out;
+}
+
+.pin-dots-container.error .pin-dot {
+  background: var(--danger);
+  border-color: var(--danger);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+}
+
+.pin-dots-container.success .pin-dot {
+  background: var(--emerald);
+  border-color: var(--emerald);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+  transform: scale(1.25);
+}
+
+@keyframes pinShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+
+.pin-msg-area {
+  min-height: 22px;
+  margin-bottom: 12px;
+}
+
+.pin-error-msg {
+  font-size: 12.5px;
+  color: var(--danger);
+  font-weight: 600;
+  animation: fadeIn 0.2s ease;
+}
+
+.pin-hint-msg {
+  font-size: 11.5px;
+  color: var(--secondary-text);
+}
+
+/* Keypad Grid */
+.keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  max-width: 250px;
+  margin: 0 auto 16px;
+}
+
+.keypad-btn {
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--primary-text);
+  font-size: 21px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.keypad-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-active);
+  transform: scale(1.04);
+}
+
+.keypad-btn:active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  transform: scale(0.94);
+}
+
+.keypad-btn.keypad-func {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--secondary-text);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.keypad-btn.keypad-func svg {
+  width: 18px;
+  height: 18px;
+}
+
+.keypad-btn.keypad-func:hover {
+  color: var(--primary-text);
+  background: var(--surface-hover);
+}
+
+.lock-foot-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.btn-text-ghost {
+  background: transparent;
+  border: none;
+  color: var(--secondary-text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: var(--transition);
+}
+
+.btn-text-ghost:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 

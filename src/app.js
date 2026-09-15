@@ -22,7 +22,9 @@ const STORE_KEYS = {
   myAccounts: 'pv_my_accounts',
   history: 'pv_history',
   prefix: 'pv_words_prefix',
-  route: 'pv_current_route'
+  route: 'pv_current_route',
+  privacyMode: 'pv_privacy_mode',
+  pin: 'pv_app_pin'
 };
 
 function loadStore(key, defaultValue = []) {
@@ -72,6 +74,13 @@ let state = {
   myAccounts: loadStore(STORE_KEYS.myAccounts),
   history: loadStore(STORE_KEYS.history),
   wordsPrefix: localStorage.getItem(STORE_KEYS.prefix) ?? 'INT ',
+  privacyMode: localStorage.getItem(STORE_KEYS.privacyMode) !== 'false',
+  unmaskedIds: new Set(),
+  pin: localStorage.getItem(STORE_KEYS.pin) || null,
+  isLocked: Boolean(localStorage.getItem(STORE_KEYS.pin)),
+  pinInput: '',
+  pinError: '',
+  pinSuccess: false,
   directoryCategory: 'all',
   runCategory: 'all',
   run: {
@@ -354,13 +363,102 @@ const ICONS = {
   key: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-1.5 1.5L13 10m-3-1a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 0V2m7 5-2 2m0-2 2 2"></path></svg>`,
   uploadCloud: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"></polyline><line x1="12" y1="12" x2="12" y2="21"></line><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path><polyline points="16 16 12 12 8 16"></polyline></svg>`,
   downloadCloud: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"></polyline><line x1="12" y1="12" x2="12" y2="21"></line><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path><polyline points="8 17 12 21 16 17"></polyline></svg>`,
+  eye: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>`,
+  eyeOff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg>`,
+  lock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`,
+  unlock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>`,
+  shieldCheck: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>`,
+  backspace: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg>`,
 };
+
+function formatMaskedAccount(accountNo, id, allowHtml = false) {
+  if (!accountNo) return '—';
+  const strId = String(id || '');
+  const isUnmasked = !state.privacyMode || (strId && state.unmaskedIds.has(strId));
+  if (isUnmasked) {
+    return allowHtml ? `<span class="acct-val unmasked">${escapeHtml(accountNo)}</span>` : accountNo;
+  }
+  const clean = String(accountNo).trim();
+  const last4 = clean.length > 4 ? clean.slice(-4) : clean;
+  const maskedText = clean.length > 8 ? `•••• •••• ${last4}` : (clean.length > 4 ? `•••• ${last4}` : `••••`);
+  return allowHtml ? `<span class="acct-val masked">${escapeHtml(maskedText)}</span>` : maskedText;
+}
+
+function renderAccountWithEye(accountNo, id, extraClass = '') {
+  if (!accountNo) return '—';
+  const strId = String(id || '');
+  const isUnmasked = !state.privacyMode || (strId && state.unmaskedIds.has(strId));
+  const displayText = formatMaskedAccount(accountNo, strId, false);
+  return `
+    <span class="acct-eye-box ${extraClass}" data-stop>
+      <span class="mono acct-digits ${isUnmasked ? 'is-unmasked' : 'is-masked'}">${escapeHtml(displayText)}</span>
+      <button type="button" class="icon-btn-eye ${isUnmasked ? 'unmasked' : ''}" data-action="toggle-unmask-item" data-id="${escapeHtml(strId)}" title="${isUnmasked ? 'Mask Account Number' : 'Show Full Account Number'}" data-stop>
+        ${isUnmasked ? ICONS.eyeOff : ICONS.eye}
+      </button>
+    </span>
+  `;
+}
+
+function renderLockScreen() {
+  return `
+    <div class="lock-screen-wrapper">
+      <div class="lock-card">
+        <div class="lock-brand">
+          <span class="lock-seal">⛁</span>
+          <span class="lock-brand-name">Payment</span>
+        </div>
+        
+        <div class="lock-header">
+          <h2 class="lock-title">Enter 4-Digit PIN</h2>
+          <p class="lock-sub">Protected Bank Payment Workspace</p>
+        </div>
+        
+        <div class="pin-dots-container ${state.pinError ? 'shake error' : ''} ${state.pinSuccess ? 'success' : ''}">
+          <div class="pin-dot ${state.pinInput.length >= 1 ? 'filled' : ''}"></div>
+          <div class="pin-dot ${state.pinInput.length >= 2 ? 'filled' : ''}"></div>
+          <div class="pin-dot ${state.pinInput.length >= 3 ? 'filled' : ''}"></div>
+          <div class="pin-dot ${state.pinInput.length >= 4 ? 'filled' : ''}"></div>
+        </div>
+        
+        <div class="pin-msg-area">
+          ${state.pinError ? `<div class="pin-error-msg">${escapeHtml(state.pinError)}</div>` : '<div class="pin-hint-msg">Tap keypad or type 4 digits on keyboard</div>'}
+        </div>
+        
+        <div class="keypad-grid">
+          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="1">1</button>
+          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="2">2</button>
+          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="3">3</button>
+          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="4">4</button>
+          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="5">5</button>
+          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="6">6</button>
+          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="7">7</button>
+          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="8">8</button>
+          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="9">9</button>
+          <button type="button" class="keypad-btn keypad-func" data-action="pin-clear" title="Clear">C</button>
+          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="0">0</button>
+          <button type="button" class="keypad-btn keypad-func" data-action="pin-backspace" title="Delete">${ICONS.backspace}</button>
+        </div>
+
+        <div class="lock-foot-actions">
+          <button type="button" class="btn-text-ghost" data-action="forgot-pin">Forgot PIN?</button>
+        </div>
+      </div>
+      ${state.modal ? renderModal() : ''}
+    </div>
+  `;
+}
 
 function render() {
   const app = document.getElementById('app');
   
   // Persist current route
   localStorage.setItem(STORE_KEYS.route, state.route);
+  
+  if (state.isLocked) {
+    app.innerHTML = renderLockScreen();
+    attachHandlers();
+    return;
+  }
   
   // Preserve scroll positions of modal and scrollable card-pad elements
   const scrollPositions = [];
@@ -377,9 +475,18 @@ function render() {
           <span class="mobile-seal">⛁</span>
           <span class="mobile-title">Payment</span>
         </div>
-        <div class="mobile-status-pill">
-          <span class="dot"></span>
-          <span>${state.parties.length} Parties</span>
+        <div class="mobile-topbar-actions">
+          <button class="topbar-sec-btn ${state.privacyMode ? 'active' : ''}" data-action="toggle-global-privacy" title="${state.privacyMode ? 'Privacy Mode: Account numbers masked' : 'Privacy Mode: Full numbers visible'}">
+            ${state.privacyMode ? ICONS.eye : ICONS.eyeOff}
+            <span class="topbar-btn-text">${state.privacyMode ? 'Masked' : 'Visible'}</span>
+          </button>
+          <button class="topbar-sec-btn ${state.pin ? 'pin-active' : ''}" data-action="open-pin-settings" title="${state.pin ? 'PIN Security Active' : 'Set 4-Digit PIN'}">
+            ${state.pin ? ICONS.lock : ICONS.key}
+          </button>
+          <div class="mobile-status-pill">
+            <span class="dot"></span>
+            <span>${state.parties.length}</span>
+          </div>
         </div>
       </header>
       ${renderRail()}
@@ -424,7 +531,17 @@ function renderRail() {
         `).join('')}
       </div>
       <div class="rail-foot">
-        Secure Storage · Bank Payments
+        <div class="rail-sec-controls">
+          <button class="rail-sec-btn ${state.privacyMode ? 'active' : ''}" data-action="toggle-global-privacy" title="Toggle privacy mask on all account numbers">
+            ${state.privacyMode ? ICONS.eye : ICONS.eyeOff}
+            <span>${state.privacyMode ? 'Privacy: Masked' : 'Privacy: Visible'}</span>
+          </button>
+          <button class="rail-sec-btn ${state.pin ? 'active' : ''}" data-action="open-pin-settings" title="PIN Security & Lock Screen">
+            ${state.pin ? ICONS.lock : ICONS.key}
+            <span>${state.pin ? 'PIN Active' : 'Set PIN'}</span>
+          </button>
+        </div>
+        <div class="rail-foot-text">Secure Storage · Bank Payments</div>
       </div>
     </nav>
   `;
@@ -942,7 +1059,7 @@ function renderDirectory() {
                     </span>
                   </td>
                   <td>${escapeHtml(p.bankName)}</td>
-                  <td class="mono">${escapeHtml(p.accountNo)}</td>
+                  <td class="mono">${renderAccountWithEye(p.accountNo, p.id)}</td>
                   <td>${escapeHtml(p.location)}</td>
                   <td class="mono">${escapeHtml(p.ifsc)}</td>
                   <td>
@@ -983,7 +1100,7 @@ function renderDirectory() {
                   </div>
                   <div class="mobile-card-field">
                     <span class="m-label">Account No</span>
-                    <span class="m-val mono">${escapeHtml(p.accountNo)}</span>
+                    <span class="m-val mono">${renderAccountWithEye(p.accountNo, p.id)}</span>
                   </div>
                   <div class="mobile-card-field">
                     <span class="m-label">Location</span>
@@ -1133,7 +1250,7 @@ function renderNewRun() {
                     ${catMeta.icon} ${escapeHtml(catMeta.shortLabel)}
                   </span>
                 </div>
-                <div class="sub">${escapeHtml(p.bankName)} · ${escapeHtml(p.location)} · ${escapeHtml(p.accountNo)}</div>
+                <div class="sub">${escapeHtml(p.bankName)} · ${escapeHtml(p.location)} · ${renderAccountWithEye(p.accountNo, p.id)}</div>
               </div>
             </div>
           `;
@@ -1166,7 +1283,7 @@ function renderNewRun() {
               </div>
               <div class="bank-cell">
                 <div>${escapeHtml(p.bankName)}</div>
-                <div class="acct">${escapeHtml(p.accountNo)}</div>
+                <div class="acct">${renderAccountWithEye(p.accountNo, p.id)}</div>
               </div>
               <div class="amount-cell">
                 <div class="currency-input">
@@ -1201,7 +1318,7 @@ function renderNewRun() {
                 <span class="m-amt-num">${i + 1}</span>
                 <div class="m-amt-info">
                   <strong>${escapeHtml(p.name)}</strong>
-                  <div class="m-amt-sub">${escapeHtml(p.bankName)} · <span class="mono">${escapeHtml(p.accountNo)}</span></div>
+                  <div class="m-amt-sub">${escapeHtml(p.bankName)} · ${renderAccountWithEye(p.accountNo, p.id)}</div>
                 </div>
                 <button class="icon-btn danger" data-action="remove-from-run" data-id="${p.id}" title="Remove">${ICONS.x}</button>
               </div>
@@ -1301,7 +1418,7 @@ function renderNewRun() {
                         <div class="account-picker-info">
                           <div class="account-holder">${escapeHtml(a.holderName)}</div>
                           <div class="account-meta">
-                            ${escapeHtml(a.bankName)} · <span class="mono">${escapeHtml(a.accountNo)}</span>
+                            ${escapeHtml(a.bankName)} · ${renderAccountWithEye(a.accountNo, a.id)}
                             ${aChq ? ` · <span style="color:var(--accent); font-weight:600;">Book: #${aChq.startStr}—#${aChq.endStr} (${aChq.remainingLeaves} left)</span>` : ''}
                           </div>
                         </div>
@@ -1560,7 +1677,7 @@ function renderAccounts() {
                 <tr>
                   <td><strong>${escapeHtml(a.holderName)}</strong></td>
                   <td>${escapeHtml(a.bankName)}</td>
-                  <td class="mono">${escapeHtml(a.accountNo)}</td>
+                  <td class="mono">${renderAccountWithEye(a.accountNo, a.id)}</td>
                   <td>
                     ${chq ? `
                       <div>
@@ -1608,7 +1725,7 @@ function renderAccounts() {
                 <div class="m-acct-body">
                   <div class="m-acct-row">
                     <span class="m-label">Account No</span>
-                    <span class="mono"><b>${escapeHtml(a.accountNo)}</b></span>
+                    <span class="mono">${renderAccountWithEye(a.accountNo, a.id)}</span>
                   </div>
                   ${a.bankEmail ? `
                     <div class="m-acct-row">
@@ -1905,6 +2022,8 @@ function renderModal() {
   const m = state.modal;
   if (m.type === 'party-form') return renderPartyFormModal(m.payload);
   if (m.type === 'account-form') return renderAccountFormModal(m.payload);
+  if (m.type === 'pin-settings') return renderPinSettingsModal();
+  if (m.type === 'confirm-reset-pin') return renderConfirmModal('Reset Security PIN?', 'Are you sure you want to reset and disable your 4-digit PIN? Your bank payment data will remain completely safe and intact.', 'reset-pin-confirmed');
   if (m.type === 'confirm-duplicate-cheque') return renderDuplicateChequeConfirmModal(m.payload);
   if (m.type === 'confirm-delete-party') return renderConfirmModal('Delete Payee?', `Are you sure you want to remove "${escapeHtml(m.payload.name)}" from your directory?`, 'delete-party-confirmed', m.payload.id);
   if (m.type === 'confirm-delete-parties-bulk') {
@@ -1926,6 +2045,100 @@ function renderModal() {
   if (m.type === 'party-history') return renderPartyHistoryModal(m.payload);
   if (m.type === 'export-monthly-modal') return renderMonthlyExportModal();
   return '';
+}
+
+function renderPinSettingsModal() {
+  const hasPin = Boolean(state.pin);
+  return `
+    <div class="modal-backdrop" data-action="close-modal">
+      <div class="modal" style="max-width:440px;" data-stop>
+        <div class="modal-head">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="background:var(--accent-soft); color:var(--accent); width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+              ${ICONS.lock}
+            </div>
+            <div>
+              <h3 style="margin:0; font-size:17px;">${hasPin ? 'PIN Security Settings' : 'Set 4-Digit PIN'}</h3>
+              <p style="margin:0; font-size:12px; color:var(--secondary-text);">Protect app & bank details from shoulder surfing</p>
+            </div>
+          </div>
+          <button class="modal-close" data-action="close-modal">${ICONS.x}</button>
+        </div>
+        <div class="modal-body" style="padding:20px;">
+          ${hasPin ? `
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:var(--surface-hover); border-radius:12px; border:1px solid var(--border);">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="font-size:20px;">🛡️</span>
+                  <div>
+                    <div style="font-weight:600; font-size:14px; color:var(--primary-text);">4-Digit PIN Lock Active</div>
+                    <div style="font-size:12px; color:var(--secondary-text);">App locks automatically on open/refresh</div>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-accent" data-action="lock-app" style="display:flex; align-items:center; gap:6px;">
+                  ${ICONS.lock} Lock Now
+                </button>
+              </div>
+
+              <!-- Change PIN Section -->
+              <div class="card" style="padding:16px; border:1px solid var(--border); border-radius:12px; background:var(--surface);">
+                <h4 style="margin:0 0 12px; font-size:14px; font-weight:600; color:var(--primary-text);">Change 4-Digit PIN</h4>
+                <form id="change-pin-form" style="display:flex; flex-direction:column; gap:12px;">
+                  <div class="field" style="margin:0;">
+                    <label style="font-size:12px;">Current PIN</label>
+                    <input type="password" name="currentPin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required placeholder="••••" style="letter-spacing:6px; font-size:16px; text-align:center;">
+                  </div>
+                  <div class="field" style="margin:0;">
+                    <label style="font-size:12px;">New 4-Digit PIN</label>
+                    <input type="password" name="newPin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required placeholder="••••" style="letter-spacing:6px; font-size:16px; text-align:center;">
+                  </div>
+                  <div class="field" style="margin:0;">
+                    <label style="font-size:12px;">Confirm New PIN</label>
+                    <input type="password" name="confirmPin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required placeholder="••••" style="letter-spacing:6px; font-size:16px; text-align:center;">
+                  </div>
+                  <button type="submit" class="btn btn-primary" style="margin-top:4px;">Update PIN</button>
+                </form>
+              </div>
+
+              <!-- Disable PIN Section -->
+              <div class="card" style="padding:16px; border:1px solid rgba(239,68,68,0.2); border-radius:12px; background:rgba(239,68,68,0.02);">
+                <h4 style="margin:0 0 6px; font-size:13px; font-weight:600; color:var(--danger);">Disable PIN Protection</h4>
+                <p style="font-size:12px; color:var(--secondary-text); margin:0 0 10px;">Remove lock screen when opening the app.</p>
+                <form id="disable-pin-form" style="display:flex; gap:8px; align-items:flex-end;">
+                  <div class="field" style="margin:0; flex:1;">
+                    <label style="font-size:11px;">Current PIN</label>
+                    <input type="password" name="currentPin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required placeholder="••••" style="letter-spacing:4px; font-size:14px; text-align:center;">
+                  </div>
+                  <button type="submit" class="btn btn-danger-ghost" style="height:42px;">Remove PIN</button>
+                </form>
+              </div>
+            </div>
+          ` : `
+            <form id="setup-pin-form" style="display:flex; flex-direction:column; gap:16px;">
+              <div style="text-align:center; padding:10px 0;">
+                <div style="font-size:36px; margin-bottom:8px;">🔒</div>
+                <p style="font-size:13px; color:var(--secondary-text); margin:0 auto; max-width:320px;">
+                  Set a 4-digit PIN to lock your bank payments application from unauthorized eyes.
+                </p>
+              </div>
+              <div class="field" style="margin:0;">
+                <label style="font-size:13px; font-weight:600;">Create 4-Digit PIN</label>
+                <input type="password" name="newPin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required placeholder="••••" style="letter-spacing:8px; font-size:20px; text-align:center; font-weight:bold;">
+              </div>
+              <div class="field" style="margin:0;">
+                <label style="font-size:13px; font-weight:600;">Confirm 4-Digit PIN</label>
+                <input type="password" name="confirmPin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" required placeholder="••••" style="letter-spacing:8px; font-size:20px; text-align:center; font-weight:bold;">
+              </div>
+              <div class="form-actions" style="margin-top:8px; padding-top:12px; border-top:1px solid var(--border);">
+                <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
+                <button type="submit" class="btn btn-accent">${ICONS.lock} Set & Enable PIN</button>
+              </div>
+            </form>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderDuplicateChequeConfirmModal(payload) {
@@ -2221,7 +2434,7 @@ function renderPartyHistoryModal(partyName) {
                     <tr>
                       <td style="padding:12px 16px; border-bottom:1px solid var(--border);">${escapeHtml(formatDateDDMMYYYY(p.date))}</td>
                       <td style="padding:12px 16px; border-bottom:1px solid var(--border);" class="mono">${escapeHtml(p.chequeNo)}</td>
-                      <td style="padding:12px 16px; border-bottom:1px solid var(--border);">${escapeHtml(p.accountName)} <span style="font-size:11px; color:var(--secondary-text);">(${escapeHtml(p.accountNo)})</span></td>
+                      <td style="padding:12px 16px; border-bottom:1px solid var(--border);">${escapeHtml(p.accountName)} <span style="font-size:11px; color:var(--secondary-text);">(${renderAccountWithEye(p.accountNo, 'ph_' + p.chequeNo)})</span></td>
                       <td style="padding:12px 16px; border-bottom:1px solid var(--border); text-align:right;" class="num">₹ ${formatINR(p.amount)}</td>
                     </tr>
                   `).join('')}
@@ -2256,61 +2469,48 @@ function renderQuickAddSection(h) {
   const dropdownSearchVal = qa.dropdownSearch || '';
   const dsQ = dropdownSearchVal.trim().toLowerCase();
 
-  const sortedParties = [...state.parties].sort((a, b) => a.name.localeCompare(b.name));
-  const filteredParties = sortedParties.filter(p =>
-    !dsQ || p.name.toLowerCase().includes(dsQ) || p.bankName.toLowerCase().includes(dsQ) || p.accountNo.includes(dsQ)
-  );
-
-  const customDropdownOptionsHtml = filteredParties.map(p => {
+  const availableParties = state.parties.filter(p => {
+    const matchesSearch =
+      !dsQ || p.name.toLowerCase().includes(dsQ) || p.bankName.toLowerCase().includes(dsQ) || p.accountNo.includes(dsQ) || (p.location && p.location.toLowerCase().includes(dsQ));
+    if (!matchesSearch) return false;
     const alreadyIn = h.parties.some(hp => hp.accountNo === p.accountNo);
-    const isSelected = p.id === qa.partyId;
-    const labelText = `${p.name.toUpperCase()} (${p.bankName.toUpperCase()})${alreadyIn ? ' [Already Added]' : ''}`;
-    return `
-      <div
-        class="custom-dropdown-option ${isSelected ? 'selected' : ''} ${alreadyIn ? 'disabled' : ''}"
-        data-action="select-custom-dropdown-party"
-        data-id="${p.id}"
-        ${alreadyIn ? 'data-disabled="true"' : ''}
-      >
-        <div class="option-main">
-          <span class="option-name">${escapeHtml(p.name.toUpperCase())}</span>
-          <span class="option-bank">${escapeHtml(p.bankName.toUpperCase())}</span>
-        </div>
-        ${alreadyIn ? '<span class="option-badge">Already Added</span>' : ''}
-      </div>
-    `;
-  }).join('');
+    return !alreadyIn;
+  });
 
-  const dropdownTriggerText = selectedParty
-    ? `${selectedParty.name.toUpperCase()} (${selectedParty.bankName.toUpperCase()})`
-    : '— Choose a payee —';
+  const customDropdownOptionsHtml = availableParties.length === 0
+    ? `<div class="custom-dropdown-empty">No matching parties found</div>`
+    : availableParties.map(p => {
+        const isSelected = p.id === qa.partyId;
+        const catMeta = getCategoryMeta(p.category || 'material');
+        return `
+          <div class="custom-dropdown-option ${isSelected ? 'selected' : ''}" data-action="select-quick-add-party" data-id="${p.id}">
+            <div class="custom-dropdown-option-name">
+              <span>${escapeHtml(p.name)}</span>
+              <span class="cat-badge cat-${catMeta.id}" style="font-size:10px; padding:1px 6px;">${catMeta.icon} ${escapeHtml(catMeta.shortLabel)}</span>
+            </div>
+            <div class="custom-dropdown-option-sub">
+              ${escapeHtml(p.bankName)} · ${escapeHtml(p.location)} · <span class="mono">${renderAccountWithEye(p.accountNo, p.id)}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
 
   const dropdownHtml = `
-    <div class="quick-add-custom-select-container ${isDropdownOpen ? 'open' : ''}">
-      <button type="button" class="quick-add-select-trigger" data-action="toggle-custom-dropdown">
-        <span class="trigger-text">${escapeHtml(dropdownTriggerText)}</span>
-        <span class="trigger-arrow">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px; display:block;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+    <div class="quick-add-custom-select-container">
+      <div class="custom-dropdown-trigger ${isDropdownOpen ? 'open' : ''}" data-action="toggle-quick-add-dropdown">
+        <span class="custom-dropdown-selected-text">
+          ${selectedParty ? escapeHtml(selectedParty.name) + ' (' + escapeHtml(selectedParty.bankName) + ')' : '-- Choose a Party --'}
         </span>
-      </button>
-
+        <span class="custom-dropdown-arrow">▾</span>
+      </div>
       ${isDropdownOpen ? `
-        <div class="custom-dropdown-panel" data-stop>
+        <div class="custom-dropdown-menu" data-stop>
           <div class="custom-dropdown-search-wrap">
             ${ICONS.search}
-            <input
-              type="text"
-              class="custom-dropdown-search-input"
-              placeholder="Search payees by name, bank, or account..."
-              value="${escapeHtml(dropdownSearchVal)}"
-              data-bind="quickAdd.dropdownSearch"
-              autofocus
-            >
+            <input type="text" class="custom-dropdown-search-input" id="quick-add-dropdown-search" placeholder="Type party name, bank or acct..." value="${escapeHtml(dropdownSearchVal)}">
           </div>
           <div class="custom-dropdown-options-list">
-            ${filteredParties.length === 0 ? `
-              <div class="custom-dropdown-empty">No payees match your search.</div>
-            ` : customDropdownOptionsHtml}
+            ${customDropdownOptionsHtml}
           </div>
         </div>
       ` : ''}
@@ -2325,7 +2525,7 @@ function renderQuickAddSection(h) {
       </div>
       <div class="quick-add-detail-item">
         <span class="detail-label">Account Number</span>
-        <span class="detail-val mono">${escapeHtml(selectedParty.accountNo)}</span>
+        <span class="detail-val mono">${renderAccountWithEye(selectedParty.accountNo, selectedParty.id)}</span>
       </div>
       <div class="quick-add-detail-item">
         <span class="detail-label">Bank Location</span>
@@ -2465,7 +2665,7 @@ function renderViewHistoryModal(h) {
                     <td style="text-align:center; font-weight:bold;">${i + 1}</td>
                     <td>${escapeHtml(p.name.toUpperCase())}</td>
                     <td>${escapeHtml(p.bankName.toUpperCase())}</td>
-                    <td class="mono">${escapeHtml(p.accountNo)}</td>
+                    <td class="mono">${renderAccountWithEye(p.accountNo, 'h_modal_' + h.id + '_' + i)}</td>
                     <td>${escapeHtml(p.location.toUpperCase())}</td>
                     <td class="mono">${escapeHtml(p.ifsc.toUpperCase())}</td>
                     <td style="text-align:right;" class="num">
@@ -3069,6 +3269,75 @@ function attachHandlers() {
       if (backupInput.files.length) handleBackupRestore(backupInput.files[0]);
     });
   }
+
+  const setupPinForm = document.getElementById('setup-pin-form');
+  if (setupPinForm) {
+    setupPinForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const fd = new FormData(setupPinForm);
+      const newPin = (fd.get('newPin') || '').trim();
+      const confirmPin = (fd.get('confirmPin') || '').trim();
+      if (!newPin || !/^\d{4}$/.test(newPin)) {
+        showToast('PIN must be exactly 4 numeric digits (0-9)');
+        return;
+      }
+      if (newPin !== confirmPin) {
+        showToast('PIN numbers do not match');
+        return;
+      }
+      state.pin = newPin;
+      localStorage.setItem(STORE_KEYS.pin, newPin);
+      state.modal = null;
+      render();
+      showToast('4-Digit Security PIN set successfully');
+    });
+  }
+
+  const changePinForm = document.getElementById('change-pin-form');
+  if (changePinForm) {
+    changePinForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const fd = new FormData(changePinForm);
+      const currentPin = (fd.get('currentPin') || '').trim();
+      const newPin = (fd.get('newPin') || '').trim();
+      const confirmPin = (fd.get('confirmPin') || '').trim();
+      if (currentPin !== state.pin) {
+        showToast('Incorrect current PIN');
+        return;
+      }
+      if (!newPin || !/^\d{4}$/.test(newPin)) {
+        showToast('New PIN must be exactly 4 numeric digits (0-9)');
+        return;
+      }
+      if (newPin !== confirmPin) {
+        showToast('New PIN numbers do not match');
+        return;
+      }
+      state.pin = newPin;
+      localStorage.setItem(STORE_KEYS.pin, newPin);
+      state.modal = null;
+      render();
+      showToast('PIN changed successfully');
+    });
+  }
+
+  const disablePinForm = document.getElementById('disable-pin-form');
+  if (disablePinForm) {
+    disablePinForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const fd = new FormData(disablePinForm);
+      const currentPin = (fd.get('currentPin') || '').trim();
+      if (currentPin !== state.pin) {
+        showToast('Incorrect current PIN');
+        return;
+      }
+      state.pin = null;
+      localStorage.removeItem(STORE_KEYS.pin);
+      state.modal = null;
+      render();
+      showToast('PIN protection removed');
+    });
+  }
 }
 
 let tempParsedParties = [];
@@ -3289,10 +3558,118 @@ function renderPartial() {
   }
 }
 
+function handlePinDigit(num) {
+  if (!state.isLocked || state.pinInput.length >= 4) return;
+  state.pinInput += String(num);
+  state.pinError = '';
+  if (state.pinInput.length === 4) {
+    if (state.pinInput === state.pin) {
+      state.pinSuccess = true;
+      render();
+      setTimeout(() => {
+        state.isLocked = false;
+        state.pinInput = '';
+        state.pinSuccess = false;
+        state.pinError = '';
+        render();
+        showToast('App unlocked');
+      }, 200);
+    } else {
+      state.pinError = 'Incorrect PIN. Try again.';
+      render();
+      setTimeout(() => {
+        state.pinInput = '';
+        state.pinError = '';
+        render();
+      }, 600);
+    }
+  } else {
+    render();
+  }
+}
+
+function handlePinBackspace() {
+  if (!state.isLocked || state.pinInput.length === 0) return;
+  state.pinInput = state.pinInput.slice(0, -1);
+  state.pinError = '';
+  render();
+}
+
+function handlePinClear() {
+  if (!state.isLocked) return;
+  state.pinInput = '';
+  state.pinError = '';
+  render();
+}
+
 function handleAction(action, el, e) {
   const id = el.dataset.id;
 
   switch (action) {
+    case 'toggle-global-privacy':
+      state.privacyMode = !state.privacyMode;
+      localStorage.setItem(STORE_KEYS.privacyMode, state.privacyMode ? 'true' : 'false');
+      if (state.privacyMode) state.unmaskedIds.clear();
+      render();
+      showToast(state.privacyMode ? 'Privacy Mode: Account numbers masked' : 'Privacy Mode: Full numbers visible');
+      break;
+
+    case 'toggle-unmask-item':
+      if (e) e.stopPropagation();
+      if (id) {
+        if (state.unmaskedIds.has(id)) {
+          state.unmaskedIds.delete(id);
+        } else {
+          state.unmaskedIds.add(id);
+        }
+        render();
+      }
+      break;
+
+    case 'open-pin-settings':
+      openModal({ type: 'pin-settings' });
+      break;
+
+    case 'lock-app':
+      if (state.pin) {
+        state.isLocked = true;
+        state.modal = null;
+        state.pinInput = '';
+        state.pinError = '';
+        render();
+        showToast('App locked');
+      } else {
+        openModal({ type: 'pin-settings' });
+      }
+      break;
+
+    case 'pin-digit':
+      if (el.dataset.num !== undefined) handlePinDigit(el.dataset.num);
+      break;
+
+    case 'pin-backspace':
+      handlePinBackspace();
+      break;
+
+    case 'pin-clear':
+      handlePinClear();
+      break;
+
+    case 'forgot-pin':
+      openModal({ type: 'confirm-reset-pin' });
+      break;
+
+    case 'reset-pin-confirmed':
+      state.pin = null;
+      localStorage.removeItem(STORE_KEYS.pin);
+      state.isLocked = false;
+      state.modal = null;
+      state.pinInput = '';
+      state.pinError = '';
+      render();
+      showToast('Security PIN has been reset');
+      break;
+
     case 'close-modal':
       closeModal();
       break;
@@ -3898,6 +4275,22 @@ document.addEventListener('wheel', (e) => {
     e.preventDefault();
   }
 }, { passive: false });
+
+// Keyboard listener for 4-Digit Lock Screen
+window.addEventListener('keydown', (e) => {
+  if (state.isLocked) {
+    if (e.key >= '0' && e.key <= '9') {
+      e.preventDefault();
+      handlePinDigit(e.key);
+    } else if (e.key === 'Backspace') {
+      e.preventDefault();
+      handlePinBackspace();
+    } else if (e.key === 'Escape' || e.key === 'c' || e.key === 'C') {
+      e.preventDefault();
+      handlePinClear();
+    }
+  }
+});
 
 async function checkSupabaseStatusOnLoad() {
   if (!isSupabaseConfigured()) {
