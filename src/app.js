@@ -500,7 +500,7 @@ function renderDashboard() {
         <h1>Financial Dashboard</h1>
         <p class="sub">Live overview of cheque disbursements, party volumes, and bank outflows.</p>
       </div>
-      <div class="head-actions">
+      <div class="head-actions desktop-only">
         <button class="btn btn-accent" data-action="goto-newrun">${ICONS.plus} New Payment Run</button>
       </div>
     </div>
