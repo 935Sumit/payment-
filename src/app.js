@@ -705,7 +705,8 @@ function renderDirectory() {
         </div>
       </div>
       ${list.length === 0 ? renderDirectoryEmpty(state.search.trim()) : `
-        <div style="overflow-x:auto;">
+        <!-- Desktop Table View -->
+        <div class="desktop-only" style="overflow-x:auto;">
           <table>
             <thead>
               <tr>
@@ -755,6 +756,52 @@ function renderDirectory() {
               `;}).join('')}
             </tbody>
           </table>
+        </div>
+
+        <!-- Mobile Native Cards View (No horizontal scroll needed!) -->
+        <div class="mobile-only mobile-cards-list">
+          ${list.map(p => {
+            const rowSelected = state.directorySelectedIds.includes(p.id);
+            const catMeta = getCategoryMeta(p.category || 'material');
+            return `
+              <div class="mobile-party-card ${rowSelected ? 'selected' : ''}">
+                <div class="mobile-card-header">
+                  <div class="check mobile-card-check ${rowSelected ? 'checked' : ''}" data-action="toggle-directory-party" data-id="${p.id}">
+                    ${rowSelected ? ICONS.check : ''}
+                  </div>
+                  <div class="mobile-card-title-wrap">
+                    <h4 class="mobile-card-title">${escapeHtml(p.name)}</h4>
+                    <span class="cat-badge cat-${catMeta.id}" style="width:fit-content; font-size:11px; padding:2px 8px;">
+                      ${catMeta.icon} ${escapeHtml(catMeta.shortLabel)}
+                    </span>
+                  </div>
+                </div>
+                <div class="mobile-card-grid">
+                  <div class="mobile-card-field">
+                    <span class="m-label">Bank</span>
+                    <span class="m-val">${escapeHtml(p.bankName)}</span>
+                  </div>
+                  <div class="mobile-card-field">
+                    <span class="m-label">Account No</span>
+                    <span class="m-val mono">${escapeHtml(p.accountNo)}</span>
+                  </div>
+                  <div class="mobile-card-field">
+                    <span class="m-label">Location</span>
+                    <span class="m-val">${escapeHtml(p.location)}</span>
+                  </div>
+                  <div class="mobile-card-field">
+                    <span class="m-label">IFSC</span>
+                    <span class="m-val mono">${escapeHtml(p.ifsc)}</span>
+                  </div>
+                </div>
+                <div class="mobile-card-actions">
+                  <button class="btn btn-sm btn-ghost" data-action="view-party-history" data-name="${escapeHtml(p.name)}">${ICONS.history} History</button>
+                  <button class="btn btn-sm btn-ghost" data-action="edit-party" data-id="${p.id}">${ICONS.edit} Edit</button>
+                  <button class="btn btn-sm btn-danger-ghost" data-action="delete-party" data-id="${p.id}">${ICONS.trash} Delete</button>
+                </div>
+              </div>
+            `;
+          }).join('')}
         </div>
       `}
     </div>
@@ -903,7 +950,8 @@ function renderNewRun() {
             Total: <strong>₹ ${formatINR(total)}</strong>
           </div>
         </div>
-        <div class="amount-sheet">
+        <!-- Desktop Amount Sheet -->
+        <div class="desktop-only amount-sheet">
           <div class="amount-sheet-head">
             <span>#</span>
             <span>Payee / Party</span>
@@ -943,6 +991,43 @@ function renderNewRun() {
           <div class="amount-sheet-foot">
             <span class="foot-label">Grand Total</span>
             <span class="foot-total num" id="amount-sheet-foot-total">₹ ${formatINR(total)}</span>
+          </div>
+        </div>
+
+        <!-- Mobile Amount Cards View (No horizontal scroll!) -->
+        <div class="mobile-only mobile-amount-list" style="padding: 10px 12px 14px;">
+          ${selected.map((p, i) => `
+            <div class="mobile-amount-card">
+              <div class="m-amt-head">
+                <span class="m-amt-num">${i + 1}</span>
+                <div class="m-amt-info">
+                  <strong>${escapeHtml(p.name)}</strong>
+                  <div class="m-amt-sub">${escapeHtml(p.bankName)} · <span class="mono">${escapeHtml(p.accountNo)}</span></div>
+                </div>
+                <button class="icon-btn danger" data-action="remove-from-run" data-id="${p.id}" title="Remove">${ICONS.x}</button>
+              </div>
+              <div class="m-amt-input-wrap">
+                <label>Amount (₹)</label>
+                <div class="currency-input">
+                  <span class="currency-symbol">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    class="amount-input"
+                    placeholder="0"
+                    value="${state.run.amounts[p.id] ?? ''}"
+                    data-action="set-amount"
+                    data-id="${p.id}"
+                    inputmode="numeric"
+                  >
+                </div>
+              </div>
+            </div>
+          `).join('')}
+          <div class="amount-sheet-foot" style="border-radius: 10px; margin-top: 6px;">
+            <span class="foot-label">Grand Total</span>
+            <span class="foot-total num">₹ ${formatINR(total)}</span>
           </div>
         </div>
       </div>
@@ -1142,7 +1227,8 @@ function renderHistory() {
           ? [{ label: 'Clear Search', action: 'clear-search', variant: 'btn-ghost' }]
           : [{ label: 'Start a Payment Run', action: 'goto-newrun', variant: 'btn-primary', iconKey: 'plus' }],
       }) : `
-        <div style="overflow-x:auto;">
+        <!-- Desktop Table View -->
+        <div class="desktop-only" style="overflow-x:auto;">
           <table>
             <thead>
               <tr>
@@ -1193,6 +1279,48 @@ function renderHistory() {
             </tbody>
           </table>
         </div>
+
+        <!-- Mobile History Cards View (No horizontal scroll!) -->
+        <div class="mobile-only mobile-cards-list" style="padding: 10px 12px 14px;">
+          ${sorted.map(h => {
+            const mailSubject = encodeURIComponent(`Combined Cheque Payment Voucher - Cheque No. ${h.chequeNo}`);
+            const mailBody = encodeURIComponent(
+              `Dear Sir/Madam,\n\n` +
+              `Please find attached the combined cheque payment split details sheet for the following transaction:\n\n` +
+              `- Payer Bank A/C: ${(h.account ? h.account.holderName : '').toUpperCase()}\n` +
+              `- Bank Name: ${(h.account ? h.account.bankName : '').toUpperCase()}\n` +
+              `- Account Number: ${h.account ? h.account.accountNo : ''}\n` +
+              `- Cheque No: ${h.chequeNo}\n` +
+              `- Date: ${formatDateDDMMYYYY(h.date)}\n` +
+              `- Total Amount: Rs. ${formatINR(h.total)} /-\n` +
+              `- Amount in Words: ${amountToWordsLine(h.total, h.prefix ?? 'INT ')}\n\n` +
+              `[IMPORTANT: Please attach the downloaded file: RTGS-NEFT PAYMENT LIST ${formatDateDDMMYYYY(h.date)}.xlsx to this email before sending]\n\n` +
+              `Best regards,\n` +
+              `${(h.account ? h.account.holderName : '').toUpperCase()}`
+            );
+            const mailTo = h.account ? h.account.bankEmail : '';
+            return `
+              <div class="mobile-history-card history-row" data-id="${h.id}">
+                <div class="m-hist-top">
+                  <div>
+                    <span class="m-hist-date">📅 ${formatDateDDMMYYYY(h.date)}</span>
+                    <div class="m-hist-cheque mono">Cheque #${escapeHtml(h.chequeNo)}</div>
+                  </div>
+                  <div class="m-hist-total num">₹ ${formatINR(h.total)}</div>
+                </div>
+                <div class="m-hist-details">
+                  <div><span class="m-label">Bank:</span> <b>${escapeHtml(h.account ? h.account.bankName : '—')}</b></div>
+                  <div><span class="m-label">Payees:</span> <b>${h.parties.length} recipient${h.parties.length === 1 ? '' : 's'}</b></div>
+                </div>
+                <div class="mobile-card-actions">
+                  <button class="btn btn-sm btn-accent" data-action="redownload-history" data-id="${h.id}" data-stop>${ICONS.download} Excel</button>
+                  <a href="mailto:${escapeHtml(mailTo)}?subject=${mailSubject}&body=${mailBody}" class="btn btn-sm btn-ghost" data-stop style="text-decoration:none;">${ICONS.mail} Email</a>
+                  <button class="btn btn-sm btn-danger-ghost" data-action="delete-history" data-id="${h.id}" data-stop>${ICONS.trash} Delete</button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
       `}
     </div>
   `;
@@ -1214,7 +1342,8 @@ function renderAccounts() {
         message: 'Add your paying accounts to start generating vouchers.',
         buttons: [{ label: 'Add Account', action: 'open-account-form', variant: 'btn-primary', iconKey: 'plus' }],
       }) : `
-        <div style="overflow-x:auto;">
+        <!-- Desktop Table View -->
+        <div class="desktop-only" style="overflow-x:auto;">
           <table>
             <thead>
               <tr>
@@ -1263,6 +1392,52 @@ function renderAccounts() {
               `;}).join('')}
             </tbody>
           </table>
+        </div>
+
+        <!-- Mobile Accounts Cards View (No horizontal scroll!) -->
+        <div class="mobile-only mobile-cards-list" style="padding: 10px 12px 14px;">
+          ${state.myAccounts.map(a => {
+            const chq = getChequeBookInfo(a);
+            const pct = chq && chq.totalLeaves > 0 ? (chq.usedCount / chq.totalLeaves) * 100 : 0;
+            return `
+              <div class="mobile-account-card">
+                <div class="m-acct-head">
+                  <div>
+                    <h4 class="m-acct-name">${escapeHtml(a.holderName)}</h4>
+                    <div class="m-acct-bank">${escapeHtml(a.bankName)}</div>
+                  </div>
+                  <div class="icon-bubble">${ICONS.bank}</div>
+                </div>
+                <div class="m-acct-body">
+                  <div class="m-acct-row">
+                    <span class="m-label">Account No</span>
+                    <span class="mono"><b>${escapeHtml(a.accountNo)}</b></span>
+                  </div>
+                  ${a.bankEmail ? `
+                    <div class="m-acct-row">
+                      <span class="m-label">Bank Email</span>
+                      <span>${escapeHtml(a.bankEmail)}</span>
+                    </div>
+                  ` : ''}
+                  ${chq ? `
+                    <div class="m-acct-chq-box" style="margin-top:4px; padding-top:6px; border-top:1px dashed var(--border);">
+                      <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                        <span>Series: <b>#${escapeHtml(chq.startStr)}—#${escapeHtml(chq.endStr)}</b></span>
+                        <span style="color:var(--accent); font-weight:700;">${chq.remainingLeaves} leaves left</span>
+                      </div>
+                      <div class="chq-mini-progress" style="width:100%;">
+                        <div class="chq-mini-bar ${chq.isOutOfLeaves ? 'danger' : (chq.isNearEnd ? 'warning' : '')}" style="width:${pct}%;"></div>
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
+                <div class="mobile-card-actions">
+                  <button class="btn btn-sm btn-ghost" data-action="edit-account" data-id="${a.id}">${ICONS.edit} Edit</button>
+                  <button class="btn btn-sm btn-danger-ghost" data-action="delete-account" data-id="${a.id}">${ICONS.trash} Delete</button>
+                </div>
+              </div>
+            `;
+          }).join('')}
         </div>
       `}
     </div>
