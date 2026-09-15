@@ -384,6 +384,7 @@ function renderDashboard() {
   const totalRuns = history.length;
   const totalParties = state.parties.length;
   const totalAccounts = state.myAccounts.length;
+  const totalChequesCount = history.reduce((sum, h) => sum + (h.parties ? h.parties.length : 0), 0);
 
   // 1. Monthly Outflow Grouping (Last 6 months)
   const monthlyData = {};
@@ -404,7 +405,8 @@ function renderDashboard() {
     monthlyData[currentYM] = 0;
   }
 
-  const maxVal = Math.max(...monthKeys.map(k => monthlyData[k]), 1000);
+  const rawMax = Math.max(...monthKeys.map(k => monthlyData[k]), 0);
+  const maxVal = rawMax > 0 ? rawMax * 1.18 : 1000; // Headroom for label
 
   const formatMonthName = (ym) => {
     const [y, m] = ym.split('-');
@@ -412,18 +414,19 @@ function renderDashboard() {
     return date.toLocaleString('default', { month: 'short', year: '2-digit' });
   };
 
-  const chartHeight = 180;
-  const chartWidth = 500;
-  const barWidth = 40;
-  const gap = 30;
+  const chartHeight = 175;
+  const barWidth = 36;
+  const gap = 20;
   const totalBarWidth = barWidth + gap;
-  const startX = 40;
+  const startX = 30;
+  const totalSvgWidth = Math.max(340, startX + monthKeys.length * totalBarWidth + 25);
+  const baselineY = chartHeight - 32;
 
   const svgBarsHtml = monthKeys.map((ym, i) => {
     const val = monthlyData[ym] || 0;
-    const barHeight = maxVal > 0 ? (val / maxVal) * (chartHeight - 50) : 0;
+    const barHeight = maxVal > 0 ? (val / maxVal) * (baselineY - 26) : 0;
     const x = startX + i * totalBarWidth;
-    const y = chartHeight - 30 - barHeight;
+    const y = baselineY - barHeight;
     const label = formatMonthName(ym);
     
     return `
@@ -432,8 +435,8 @@ function renderDashboard() {
           x="${x}" 
           y="${y}" 
           width="${barWidth}" 
-          height="${barHeight}" 
-          rx="6" 
+          height="${Math.max(barHeight, 2)}" 
+          rx="5" 
           fill="url(#barGradient)" 
           class="chart-bar"
         >
@@ -441,21 +444,21 @@ function renderDashboard() {
         </rect>
         <text 
           x="${x + barWidth / 2}" 
-          y="${y - 8}" 
+          y="${y - 6}" 
           text-anchor="middle" 
-          font-size="10.5px" 
-          font-weight="600" 
+          font-size="10px" 
+          font-weight="700" 
           fill="var(--primary-text)"
         >
           ${val > 0 ? '₹' + formatShortINR(val) : '₹0'}
         </text>
         <text 
           x="${x + barWidth / 2}" 
-          y="${chartHeight - 10}" 
+          y="${chartHeight - 12}" 
           text-anchor="middle" 
           font-size="11px" 
           fill="var(--secondary-text)" 
-          font-weight="500"
+          font-weight="600"
         >
           ${label}
         </text>
@@ -477,7 +480,8 @@ function renderDashboard() {
   const payeeSplit = {};
   history.forEach(h => {
     (h.parties || []).forEach(p => {
-      const name = p.name.toUpperCase();
+      const name = (p.name || '').toUpperCase().trim();
+      if (!name) return;
       payeeSplit[name] = (payeeSplit[name] || 0) + (p.amount || 0);
     });
   });
@@ -487,12 +491,42 @@ function renderDashboard() {
 
   const maxPayeeVal = topPayeesSorted[0] ? topPayeesSorted[0][1] : 1;
 
+  // 4. Recent Payment Runs (Latest 4)
+  const recentRuns = [...history].reverse().slice(0, 4);
+
   return `
     <div class="page-head">
       <div>
         <h1>Financial Dashboard</h1>
-        <p class="sub">Overview of cheque disbursements, account balances, and historical trends.</p>
+        <p class="sub">Live overview of cheque disbursements, party volumes, and bank outflows.</p>
       </div>
+      <div class="head-actions">
+        <button class="btn btn-accent" data-action="goto-newrun">${ICONS.plus} New Payment Run</button>
+      </div>
+    </div>
+
+    <!-- Dashboard Quick Actions -->
+    <div class="dashboard-quick-actions">
+      <button type="button" class="dashboard-quick-btn primary" data-action="goto-newrun">
+        ${ICONS.plus}
+        <span>New Payment Run</span>
+      </button>
+      <button type="button" class="dashboard-quick-btn" data-action="goto-directory">
+        ${ICONS.directory}
+        <span>Directory (${totalParties})</span>
+      </button>
+      <button type="button" class="dashboard-quick-btn" data-action="goto-history">
+        ${ICONS.history}
+        <span>History (${totalRuns})</span>
+      </button>
+      <button type="button" class="dashboard-quick-btn" data-action="goto-accounts">
+        ${ICONS.bank}
+        <span>Accounts (${totalAccounts})</span>
+      </button>
+      <button type="button" class="dashboard-quick-btn" data-action="open-export-monthly-modal">
+        ${ICONS.download}
+        <span>Export Month</span>
+      </button>
     </div>
 
     <!-- KPI Grid -->
@@ -502,29 +536,44 @@ function renderDashboard() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
         </div>
         <div class="kpi-info">
-          <span class="kpi-label">Total Disbursed</span>
+          <div class="kpi-label-row">
+            <span class="kpi-label">Total Disbursed</span>
+          </div>
           <h2 class="kpi-value">₹ ${formatINR(totalOutflow)}</h2>
+          <span class="kpi-sub">Across all logged runs</span>
         </div>
       </div>
+
       <div class="kpi-card">
         <div class="kpi-icon runs">${ICONS.history}</div>
         <div class="kpi-info">
-          <span class="kpi-label">Payment Runs</span>
+          <div class="kpi-label-row">
+            <span class="kpi-label">Payment Runs</span>
+          </div>
           <h2 class="kpi-value">${totalRuns}</h2>
+          <span class="kpi-sub">${totalChequesCount} total vouchers</span>
         </div>
       </div>
+
       <div class="kpi-card">
         <div class="kpi-icon parties">${ICONS.directory}</div>
         <div class="kpi-info">
-          <span class="kpi-label">Active Payees</span>
+          <div class="kpi-label-row">
+            <span class="kpi-label">Active Payees</span>
+          </div>
           <h2 class="kpi-value">${totalParties}</h2>
+          <span class="kpi-sub">Directory registered</span>
         </div>
       </div>
+
       <div class="kpi-card">
         <div class="kpi-icon accounts">${ICONS.bank}</div>
         <div class="kpi-info">
-          <span class="kpi-label">Bank Accounts</span>
+          <div class="kpi-label-row">
+            <span class="kpi-label">Bank Accounts</span>
+          </div>
           <h2 class="kpi-value">${totalAccounts}</h2>
+          <span class="kpi-sub">Connected payer banks</span>
         </div>
       </div>
     </div>
@@ -535,20 +584,30 @@ function renderDashboard() {
       <!-- Outflow Bar Chart Card -->
       <div class="card chart-card">
         <div class="card-head">
-          <h3>Monthly Cash Outflow (Last 6 Months)</h3>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <h3>Monthly Cash Outflow</h3>
+            <span class="badge badge-accent" style="font-size:11px;">Last 6 Months</span>
+          </div>
         </div>
-        <div class="card-pad" style="display:flex; justify-content:center; align-items:center; min-height:220px; overflow-x:auto;">
+        <div class="card-pad" style="display:flex; justify-content:center; align-items:center; min-height:200px; padding: 16px 14px; width: 100%; box-sizing: border-box;">
           ${history.length === 0 ? `
-            <div class="dashboard-empty-chart">No transaction logs available yet.</div>
+            <div class="dashboard-empty-chart" style="text-align:center; padding: 30px 10px;">
+              <div style="font-size: 28px; margin-bottom: 8px;">📊</div>
+              <div>No transaction logs recorded yet.</div>
+              <div style="font-size: 12px; margin-top: 4px; color: var(--secondary-text);">Create your first payment run to view monthly outflow charts.</div>
+            </div>
           ` : `
-            <svg width="100%" height="${chartHeight}" viewBox="0 0 ${startX + monthKeys.length * totalBarWidth + 20} ${chartHeight}" style="min-width: 440px;" preserveAspectRatio="xMinYMin meet">
+            <svg viewBox="0 0 ${totalSvgWidth} ${chartHeight}" style="width: 100%; max-width: 100%; height: auto; max-height: 200px; display: block;" preserveAspectRatio="xMidYMid meet">
               <defs>
                 <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stop-color="hsl(38, 90%, 55%)" />
                   <stop offset="100%" stop-color="hsl(38, 90%, 42%)" />
                 </linearGradient>
               </defs>
-              <line x1="20" y1="${chartHeight - 30}" x2="${startX + monthKeys.length * totalBarWidth + 10}" y2="${chartHeight - 30}" stroke="var(--border)" stroke-width="1" />
+              <!-- Gridlines -->
+              <line x1="15" y1="26" x2="${totalSvgWidth - 15}" y2="26" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3" opacity="0.6" />
+              <line x1="15" y1="${Math.round(26 + (baselineY - 26) / 2)}" x2="${totalSvgWidth - 15}" y2="${Math.round(26 + (baselineY - 26) / 2)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3" opacity="0.6" />
+              <line x1="15" y1="${baselineY}" x2="${totalSvgWidth - 15}" y2="${baselineY}" stroke="var(--border)" stroke-width="1.2" />
               ${svgBarsHtml}
             </svg>
           `}
@@ -558,18 +617,24 @@ function renderDashboard() {
       <!-- Bank Accounts Split Card -->
       <div class="card split-card">
         <div class="card-head">
-          <h3>Payer Bank Disbursements</h3>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <h3>Payer Bank Disbursements</h3>
+            ${bankSplitSorted.length > 0 ? `<span class="badge" style="font-size:11px;">${bankSplitSorted.length} Banks</span>` : ''}
+          </div>
         </div>
-        <div class="card-pad scrollable-split-list">
+        <div class="card-pad scrollable-split-list" style="max-height: 220px; overflow-y: auto;">
           ${bankSplitSorted.length === 0 ? `
-            <div class="dashboard-empty-chart">No paying account records found.</div>
+            <div class="dashboard-empty-chart" style="text-align:center; padding: 30px 10px;">
+              <div style="font-size: 28px; margin-bottom: 8px;">🏦</div>
+              <div>No paying bank records found.</div>
+            </div>
           ` : bankSplitSorted.map(([acctName, amt]) => {
             const percentage = totalOutflow > 0 ? (amt / totalOutflow) * 100 : 0;
             return `
               <div class="split-row">
                 <div class="split-row-meta">
-                  <span class="split-name">${escapeHtml(acctName)}</span>
-                  <span class="split-val">₹ ${formatINR(amt)} (${percentage.toFixed(1)}%)</span>
+                  <span class="split-name" title="${escapeHtml(acctName)}">${escapeHtml(acctName)}</span>
+                  <span class="split-val"><strong>₹ ${formatINR(amt)}</strong> (${percentage.toFixed(0)}%)</span>
                 </div>
                 <div class="split-progress-container">
                   <div class="split-progress-bar" style="width: ${percentage}%"></div>
@@ -582,36 +647,101 @@ function renderDashboard() {
 
     </div>
 
-    <!-- Top Payees Section -->
-    <div class="card" style="margin-top:28px;">
-      <div class="card-head">
-        <h3>Top 5 Paid Payees (By Aggregate Volume)</h3>
-      </div>
-      <div class="card-pad">
-        ${topPayeesSorted.length === 0 ? `
-          <div class="dashboard-empty-chart" style="padding:20px 0;">No payee payment records found.</div>
-        ` : `
-          <div class="top-payees-list">
-            ${topPayeesSorted.map(([payeeName, totalAmt], index) => {
-              const pct = maxPayeeVal > 0 ? (totalAmt / maxPayeeVal) * 100 : 0;
-              return `
-                <div class="top-payee-item">
-                  <div class="payee-rank">${index + 1}</div>
-                  <div class="payee-info-col">
-                    <span class="payee-name">${escapeHtml(payeeName)}</span>
-                    <div class="payee-progress-bar-wrap">
-                      <div class="payee-progress-bar" style="width: ${pct}%"></div>
+    <!-- Bottom Section: Top Payees & Recent Runs -->
+    <div class="dashboard-bottom-grid">
+      
+      <!-- Top Payees Section -->
+      <div class="card">
+        <div class="card-head">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <h3>Top 5 Payees by Volume</h3>
+            <span class="badge" style="font-size:11px;">Aggregate</span>
+          </div>
+        </div>
+        <div class="card-pad">
+          ${topPayeesSorted.length === 0 ? `
+            <div class="dashboard-empty-chart" style="padding:24px 0; text-align:center;">
+              <div style="font-size: 24px; margin-bottom: 6px;">👥</div>
+              <div>No payee payment records found.</div>
+            </div>
+          ` : `
+            <div class="top-payees-list">
+              ${topPayeesSorted.map(([payeeName, totalAmt], index) => {
+                const pct = maxPayeeVal > 0 ? (totalAmt / maxPayeeVal) * 100 : 0;
+                const rankClass = index === 0 ? 'rank-gold' : index === 1 ? 'rank-silver' : index === 2 ? 'rank-bronze' : '';
+                return `
+                  <div class="top-payee-item">
+                    <div class="payee-rank ${rankClass}">${index + 1}</div>
+                    <div class="payee-info-col">
+                      <span class="payee-name" title="${escapeHtml(payeeName)}">${escapeHtml(payeeName)}</span>
+                      <div class="payee-progress-bar-wrap">
+                        <div class="payee-progress-bar" style="width: ${pct}%"></div>
+                      </div>
+                    </div>
+                    <div class="payee-amount-col">
+                      <strong>₹ ${formatINR(totalAmt)}</strong>
                     </div>
                   </div>
-                  <div class="payee-amount-col">
-                    <strong>₹ ${formatINR(totalAmt)}</strong>
+                `;
+              }).join('')}
+            </div>
+          `}
+        </div>
+      </div>
+
+      <!-- Recent Payment Runs Preview -->
+      <div class="card">
+        <div class="card-head">
+          <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <h3>Recent Payment Runs</h3>
+              ${recentRuns.length > 0 ? `<span class="badge" style="font-size:11px;">Latest ${recentRuns.length}</span>` : ''}
+            </div>
+            ${recentRuns.length > 0 ? `
+              <button type="button" class="btn btn-ghost btn-sm" data-action="goto-history" style="padding: 4px 8px; font-size: 12px; gap: 4px;">
+                View All →
+              </button>
+            ` : ''}
+          </div>
+        </div>
+        <div class="card-pad">
+          ${recentRuns.length === 0 ? `
+            <div class="dashboard-empty-chart" style="padding:24px 0; text-align:center;">
+              <div style="font-size: 24px; margin-bottom: 6px;">📝</div>
+              <div>No recent payment runs yet.</div>
+              <button class="btn btn-primary btn-sm" data-action="goto-newrun" style="margin-top:10px;">${ICONS.plus} Create First Run</button>
+            </div>
+          ` : `
+            <div class="recent-runs-list">
+              ${recentRuns.map(r => `
+                <div class="recent-run-item">
+                  <div class="recent-run-badge">
+                    ${ICONS.newrun}
+                  </div>
+                  <div class="recent-run-info">
+                    <div class="recent-run-title-row">
+                      <span class="recent-run-bank">${escapeHtml(r.account?.bankName || 'Payer Bank')}</span>
+                      <span class="recent-run-cheque mono">#${escapeHtml(r.chequeNo)}</span>
+                    </div>
+                    <div class="recent-run-meta">
+                      <span>${formatDateDDMMYYYY(r.date)}</span>
+                      <span class="bullet">·</span>
+                      <span>${(r.parties || []).length} payee${(r.parties || []).length === 1 ? '' : 's'}</span>
+                    </div>
+                  </div>
+                  <div class="recent-run-action">
+                    <span class="recent-run-amount">₹ ${formatINR(r.total)}</span>
+                    <button class="icon-btn" data-action="view-history" data-id="${r.id}" title="Preview Voucher" style="width:28px; height:28px; padding:0;">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px; height:14px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </button>
                   </div>
                 </div>
-              `;
-            }).join('')}
-          </div>
-        `}
+              `).join('')}
+            </div>
+          `}
+        </div>
       </div>
+
     </div>
   `;
 }
@@ -3238,6 +3368,8 @@ function handleAction(action, el, e) {
     case 'goto-directory': state.route = 'directory'; render(); break;
     case 'goto-newrun': state.route = 'newrun'; render(); break;
     case 'goto-accounts': state.route = 'accounts'; render(); break;
+    case 'goto-history': state.route = 'history'; render(); break;
+    case 'goto-dashboard': state.route = 'dashboard'; render(); break;
 
     case 'set-directory-category':
       state.directoryCategory = el.dataset.cat;
