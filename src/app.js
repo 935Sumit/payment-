@@ -788,8 +788,8 @@ function renderDashboard() {
             <svg viewBox="0 0 ${totalSvgWidth} ${chartHeight}" style="width: 100%; max-width: 100%; height: auto; max-height: 200px; display: block;" preserveAspectRatio="xMidYMid meet">
               <defs>
                 <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="hsl(38, 90%, 55%)" />
-                  <stop offset="100%" stop-color="hsl(38, 90%, 42%)" />
+                  <stop offset="0%" stop-color="#818cf8" />
+                  <stop offset="100%" stop-color="#4f46e5" />
                 </linearGradient>
               </defs>
               <!-- Gridlines -->
@@ -1408,9 +1408,10 @@ function renderNewRun() {
                     const isSelected = a.id === state.run.accountId;
                     const aChq = getChequeBookInfo(a);
                     return `
-                      <button
-                        type="button"
+                      <div
                         class="account-picker-item ${isSelected ? 'selected' : ''}"
+                        role="button"
+                        tabindex="0"
                         data-action="select-payer-account"
                         data-id="${a.id}"
                       >
@@ -1423,7 +1424,7 @@ function renderNewRun() {
                           </div>
                         </div>
                         <div class="account-picker-icon">${ICONS.bank}</div>
-                      </button>
+                      </div>
                     `;
                   }).join('')}
                 </div>
@@ -3052,6 +3053,15 @@ function attachHandlers() {
       const action = el.dataset.action;
       handleAction(action, el, e);
     });
+    if (el.getAttribute('role') === 'button') {
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const action = el.dataset.action;
+          handleAction(action, el, e);
+        }
+      });
+    }
   });
 
   app.querySelectorAll('[data-stop]').forEach(el => {
