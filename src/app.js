@@ -13,6 +13,7 @@ import {
   dbUpsertHistories,
   dbDeleteHistory,
   dbSaveSetting,
+  dbFetchSettings,
   dbPushAllToCloud,
   dbPullAllFromCloud
 } from './supabase';
@@ -408,8 +409,8 @@ function renderLockScreen() {
         </div>
         
         <div class="lock-header">
-          <h2 class="lock-title">Enter 4-Digit PIN</h2>
-          <p class="lock-sub">Protected Bank Payment Workspace</p>
+          <h2 class="lock-title">Enter Passcode</h2>
+          <p class="lock-sub">Enter your 4-digit security PIN</p>
         </div>
         
         <div class="pin-dots-container ${state.pinError ? 'shake error' : ''} ${state.pinSuccess ? 'success' : ''}">
@@ -420,22 +421,56 @@ function renderLockScreen() {
         </div>
         
         <div class="pin-msg-area">
-          ${state.pinError ? `<div class="pin-error-msg">${escapeHtml(state.pinError)}</div>` : '<div class="pin-hint-msg">Tap keypad or type 4 digits on keyboard</div>'}
+          ${state.pinError ? `<div class="pin-error-msg">${escapeHtml(state.pinError)}</div>` : '<div class="pin-hint-msg">Tap keypad or type digits on keyboard</div>'}
         </div>
         
-        <div class="keypad-grid">
-          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="1">1</button>
-          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="2">2</button>
-          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="3">3</button>
-          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="4">4</button>
-          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="5">5</button>
-          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="6">6</button>
-          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="7">7</button>
-          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="8">8</button>
-          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="9">9</button>
-          <button type="button" class="keypad-btn keypad-func" data-action="pin-clear" title="Clear">C</button>
-          <button type="button" class="keypad-btn" data-action="pin-digit" data-num="0">0</button>
-          <button type="button" class="keypad-btn keypad-func" data-action="pin-backspace" title="Delete">${ICONS.backspace}</button>
+        <div class="keypad-grid phone-keypad">
+          <button type="button" class="keypad-btn phone-btn" data-action="pin-digit" data-num="1">
+            <span class="btn-digit">1</span>
+            <span class="btn-sub">&nbsp;</span>
+          </button>
+          <button type="button" class="keypad-btn phone-btn" data-action="pin-digit" data-num="2">
+            <span class="btn-digit">2</span>
+            <span class="btn-sub">A B C</span>
+          </button>
+          <button type="button" class="keypad-btn phone-btn" data-action="pin-digit" data-num="3">
+            <span class="btn-digit">3</span>
+            <span class="btn-sub">D E F</span>
+          </button>
+          <button type="button" class="keypad-btn phone-btn" data-action="pin-digit" data-num="4">
+            <span class="btn-digit">4</span>
+            <span class="btn-sub">G H I</span>
+          </button>
+          <button type="button" class="keypad-btn phone-btn" data-action="pin-digit" data-num="5">
+            <span class="btn-digit">5</span>
+            <span class="btn-sub">J K L</span>
+          </button>
+          <button type="button" class="keypad-btn phone-btn" data-action="pin-digit" data-num="6">
+            <span class="btn-digit">6</span>
+            <span class="btn-sub">M N O</span>
+          </button>
+          <button type="button" class="keypad-btn phone-btn" data-action="pin-digit" data-num="7">
+            <span class="btn-digit">7</span>
+            <span class="btn-sub">P Q R S</span>
+          </button>
+          <button type="button" class="keypad-btn phone-btn" data-action="pin-digit" data-num="8">
+            <span class="btn-digit">8</span>
+            <span class="btn-sub">T U V</span>
+          </button>
+          <button type="button" class="keypad-btn phone-btn" data-action="pin-digit" data-num="9">
+            <span class="btn-digit">9</span>
+            <span class="btn-sub">W X Y Z</span>
+          </button>
+          <button type="button" class="keypad-btn phone-btn keypad-func" data-action="pin-clear" title="Clear">
+            <span class="btn-func-txt">C</span>
+          </button>
+          <button type="button" class="keypad-btn phone-btn" data-action="pin-digit" data-num="0">
+            <span class="btn-digit">0</span>
+            <span class="btn-sub">+</span>
+          </button>
+          <button type="button" class="keypad-btn phone-btn keypad-func" data-action="pin-backspace" title="Delete">
+            <span class="btn-func-icon">${ICONS.backspace}</span>
+          </button>
         </div>
 
         <div class="lock-foot-actions">
@@ -3553,9 +3588,12 @@ function attachHandlers() {
       }
       state.pin = newPin;
       localStorage.setItem(STORE_KEYS.pin, newPin);
+      if (isSupabaseConfigured()) {
+        dbSaveSetting('master_app_pin', newPin).catch(err => console.warn('PIN cloud sync notice:', err));
+      }
       state.modal = null;
       render();
-      showToast('4-Digit Security PIN set successfully');
+      showToast('4-Digit Security PIN set & synced to cloud');
     });
   }
 
@@ -3581,9 +3619,12 @@ function attachHandlers() {
       }
       state.pin = newPin;
       localStorage.setItem(STORE_KEYS.pin, newPin);
+      if (isSupabaseConfigured()) {
+        dbSaveSetting('master_app_pin', newPin).catch(err => console.warn('PIN cloud sync notice:', err));
+      }
       state.modal = null;
       render();
-      showToast('PIN changed successfully');
+      showToast('PIN changed & synced to cloud');
     });
   }
 
@@ -3599,6 +3640,9 @@ function attachHandlers() {
       }
       state.pin = null;
       localStorage.removeItem(STORE_KEYS.pin);
+      if (isSupabaseConfigured()) {
+        dbSaveSetting('master_app_pin', null).catch(err => console.warn('PIN cloud sync notice:', err));
+      }
       state.modal = null;
       render();
       showToast('PIN protection removed');
@@ -3853,14 +3897,57 @@ function renderPartial() {
   }
 }
 
+function updateLockScreenDOM() {
+  const dotsContainer = document.querySelector('.pin-dots-container');
+  const msgArea = document.querySelector('.pin-msg-area');
+  if (!dotsContainer) return;
+
+  const dots = dotsContainer.querySelectorAll('.pin-dot');
+  dots.forEach((dot, idx) => {
+    if (idx < state.pinInput.length) {
+      dot.classList.add('filled');
+    } else {
+      dot.classList.remove('filled');
+    }
+  });
+
+  if (state.pinSuccess) {
+    dotsContainer.classList.remove('shake', 'error');
+    dotsContainer.classList.add('success');
+  } else if (state.pinError) {
+    dotsContainer.classList.remove('success');
+    dotsContainer.classList.add('shake', 'error');
+  } else {
+    dotsContainer.classList.remove('shake', 'error', 'success');
+  }
+
+  if (msgArea) {
+    if (state.pinError) {
+      msgArea.innerHTML = `<div class="pin-error-msg">${escapeHtml(state.pinError)}</div>`;
+    } else {
+      msgArea.innerHTML = `<div class="pin-hint-msg">Tap keypad or type digits on keyboard</div>`;
+    }
+  }
+}
+
 function handlePinDigit(num) {
   if (!state.isLocked || state.pinInput.length >= 4) return;
   state.pinInput += String(num);
   state.pinError = '';
+  updateLockScreenDOM();
+
   if (state.pinInput.length === 4) {
     if (state.pinInput === state.pin) {
       state.pinSuccess = true;
-      render();
+      updateLockScreenDOM();
+      
+      const lockCard = document.querySelector('.lock-card');
+      if (lockCard) {
+        lockCard.style.transition = 'all 0.28s cubic-bezier(0.4, 0, 0.2, 1)';
+        lockCard.style.opacity = '0';
+        lockCard.style.transform = 'scale(0.95) translateY(-8px)';
+      }
+
       setTimeout(() => {
         state.isLocked = false;
         state.pinInput = '';
@@ -3868,18 +3955,16 @@ function handlePinDigit(num) {
         state.pinError = '';
         render();
         showToast('App unlocked');
-      }, 200);
+      }, 250);
     } else {
-      state.pinError = 'Incorrect PIN. Try again.';
-      render();
+      state.pinError = 'Incorrect Passcode. Try again.';
+      updateLockScreenDOM();
       setTimeout(() => {
         state.pinInput = '';
         state.pinError = '';
-        render();
-      }, 600);
+        updateLockScreenDOM();
+      }, 550);
     }
-  } else {
-    render();
   }
 }
 
@@ -3887,14 +3972,14 @@ function handlePinBackspace() {
   if (!state.isLocked || state.pinInput.length === 0) return;
   state.pinInput = state.pinInput.slice(0, -1);
   state.pinError = '';
-  render();
+  updateLockScreenDOM();
 }
 
 function handlePinClear() {
   if (!state.isLocked) return;
   state.pinInput = '';
   state.pinError = '';
-  render();
+  updateLockScreenDOM();
 }
 
 function handleAction(action, el, e) {
@@ -3957,6 +4042,9 @@ function handleAction(action, el, e) {
     case 'reset-pin-confirmed':
       state.pin = null;
       localStorage.removeItem(STORE_KEYS.pin);
+      if (isSupabaseConfigured()) {
+        dbSaveSetting('master_app_pin', null).catch(err => console.warn('PIN cloud sync notice:', err));
+      }
       state.isLocked = false;
       state.modal = null;
       state.pinInput = '';
@@ -4754,6 +4842,18 @@ async function checkSupabaseStatusOnLoad() {
       state.supabase.message = res.message;
       if (!res.needsSchema) {
         try {
+          // Fetch cloud app settings (Master PIN, Prefix, etc.)
+          try {
+            const settings = await dbFetchSettings();
+            if (settings && settings.master_app_pin) {
+              state.pin = settings.master_app_pin;
+              localStorage.setItem(STORE_KEYS.pin, settings.master_app_pin);
+              state.isLocked = true;
+            }
+          } catch (e) {
+            console.warn('Cloud settings fetch notice:', e);
+          }
+
           const cloudData = await dbPullAllFromCloud();
           const hasCloudData = (cloudData.parties && cloudData.parties.length > 0) ||
                                (cloudData.myAccounts && cloudData.myAccounts.length > 0) ||
