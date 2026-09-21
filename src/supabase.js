@@ -6,8 +6,8 @@ const CONFIG_KEYS = {
   lastSync: 'pv_last_cloud_sync'
 };
 
-const DEFAULT_SUPABASE_URL = '[REDACTED_SUPABASE_URL]';
-const DEFAULT_SUPABASE_ANON_KEY = '[REDACTED_SUPABASE_KEY]';
+const DEFAULT_SUPABASE_URL = '';
+const DEFAULT_SUPABASE_ANON_KEY = '';
 
 let clientInstance = null;
 
@@ -18,7 +18,7 @@ export function getSupabaseConfig() {
   const anonKey = localStorage.getItem(CONFIG_KEYS.anonKey) || 
                   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY ? import.meta.env.VITE_SUPABASE_ANON_KEY : '') || 
                   DEFAULT_SUPABASE_ANON_KEY;
-  return { url: url.trim(), anonKey: anonKey.trim() };
+  return { url: (url || '').trim(), anonKey: (anonKey || '').trim() };
 }
 
 export function saveSupabaseConfig(url, anonKey) {
