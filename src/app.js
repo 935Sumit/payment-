@@ -78,7 +78,7 @@ let state = {
   privacyMode: localStorage.getItem(STORE_KEYS.privacyMode) !== 'false',
   unmaskedIds: new Set(),
   pin: localStorage.getItem(STORE_KEYS.pin) || null,
-  isLocked: Boolean(localStorage.getItem(STORE_KEYS.pin)),
+  isLocked: Boolean(localStorage.getItem(STORE_KEYS.pin)) && sessionStorage.getItem('pv_session_unlocked') !== 'true',
   pinInput: '',
   pinError: '',
   pinSuccess: false,
@@ -3588,6 +3588,7 @@ function attachHandlers() {
       }
       state.pin = newPin;
       localStorage.setItem(STORE_KEYS.pin, newPin);
+      sessionStorage.setItem('pv_session_unlocked', 'true');
       if (isSupabaseConfigured()) {
         dbSaveSetting('master_app_pin', newPin).catch(err => console.warn('PIN cloud sync notice:', err));
       }
@@ -3640,6 +3641,7 @@ function attachHandlers() {
       }
       state.pin = null;
       localStorage.removeItem(STORE_KEYS.pin);
+      sessionStorage.removeItem('pv_session_unlocked');
       if (isSupabaseConfigured()) {
         dbSaveSetting('master_app_pin', null).catch(err => console.warn('PIN cloud sync notice:', err));
       }
@@ -3949,6 +3951,7 @@ function handlePinDigit(num) {
       }
 
       setTimeout(() => {
+        sessionStorage.setItem('pv_session_unlocked', 'true');
         state.isLocked = false;
         state.pinInput = '';
         state.pinSuccess = false;
@@ -4012,6 +4015,7 @@ function handleAction(action, el, e) {
 
     case 'lock-app':
       if (state.pin) {
+        sessionStorage.removeItem('pv_session_unlocked');
         state.isLocked = true;
         state.modal = null;
         state.pinInput = '';
@@ -4042,6 +4046,7 @@ function handleAction(action, el, e) {
     case 'reset-pin-confirmed':
       state.pin = null;
       localStorage.removeItem(STORE_KEYS.pin);
+      sessionStorage.removeItem('pv_session_unlocked');
       if (isSupabaseConfigured()) {
         dbSaveSetting('master_app_pin', null).catch(err => console.warn('PIN cloud sync notice:', err));
       }
@@ -4848,7 +4853,9 @@ async function checkSupabaseStatusOnLoad() {
             if (settings && settings.master_app_pin) {
               state.pin = settings.master_app_pin;
               localStorage.setItem(STORE_KEYS.pin, settings.master_app_pin);
-              state.isLocked = true;
+              if (sessionStorage.getItem('pv_session_unlocked') !== 'true') {
+                state.isLocked = true;
+              }
             }
           } catch (e) {
             console.warn('Cloud settings fetch notice:', e);
