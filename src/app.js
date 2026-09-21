@@ -131,7 +131,7 @@ function navigateTo(route, pushHistory = true) {
 
 function openModal(modalObj, pushHistory = true) {
   state.modal = modalObj;
-  if (pushHistory) {
+  if (pushHistory && !(history.state && history.state.isModal)) {
     history.pushState({ isModal: true, route: state.route }, '', `#/${state.route}`);
   }
   render();
@@ -141,10 +141,9 @@ function closeModal(fromPopState = false) {
   if (!state.modal) return;
   state.modal = null;
   resetQuickAdd();
+  render();
   if (!fromPopState && history.state && history.state.isModal) {
     history.back();
-  } else {
-    render();
   }
 }
 
@@ -460,11 +459,22 @@ function render() {
     return;
   }
   
-  // Preserve scroll positions of modal and scrollable card-pad elements
-  const scrollPositions = [];
-  app.querySelectorAll('.modal, .card-pad').forEach((el, index) => {
-    if (el.scrollTop > 0) {
-      scrollPositions.push({ index, scrollTop: el.scrollTop });
+  // Preserve scroll positions of window, modals, tables, and scrollable containers
+  const winScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  const winScrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+  
+  const idScrolls = {};
+  app.querySelectorAll('[id]').forEach(el => {
+    if (el.id && (el.scrollTop > 0 || el.scrollLeft > 0)) {
+      idScrolls[el.id] = { top: el.scrollTop, left: el.scrollLeft };
+    }
+  });
+
+  const classScrolls = [];
+  const scrollSelectors = '.modal, .card-pad, .desktop-only, .amount-sheet, .mobile-cards-list, .mobile-amount-list, .custom-dropdown-options-list, .excel-preview-container';
+  app.querySelectorAll(scrollSelectors).forEach((el, index) => {
+    if (el.scrollTop > 0 || el.scrollLeft > 0) {
+      classScrolls.push({ index, top: el.scrollTop, left: el.scrollLeft });
     }
   });
   
@@ -495,13 +505,27 @@ function render() {
     ${state.modal ? renderModal() : ''}
   `;
   
-  // Restore scroll positions
-  scrollPositions.forEach(pos => {
-    const newEl = app.querySelectorAll('.modal, .card-pad')[pos.index];
-    if (newEl) {
-      newEl.scrollTop = pos.scrollTop;
+  // Restore scroll positions immediately
+  Object.keys(idScrolls).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollTop = idScrolls[id].top;
+      el.scrollLeft = idScrolls[id].left;
     }
   });
+
+  const newScrollEls = app.querySelectorAll(scrollSelectors);
+  classScrolls.forEach(pos => {
+    const el = newScrollEls[pos.index];
+    if (el) {
+      el.scrollTop = pos.top;
+      el.scrollLeft = pos.left;
+    }
+  });
+
+  if (winScrollY > 0 || winScrollX > 0) {
+    window.scrollTo(winScrollX, winScrollY);
+  }
 
   attachHandlers();
 }
@@ -1173,6 +1197,9 @@ function renderNewRun() {
   const chqInfo = getChequeBookInfo(account);
   const dupRecord = findDuplicateCheque(state.run.chequeNo, state.run.editingHistoryId);
 
+  const allVisibleSelected = filteredRunList.length > 0 && filteredRunList.every(p => state.run.selectedIds.includes(p.id));
+  const someVisibleSelected = filteredRunList.some(p => state.run.selectedIds.includes(p.id));
+
   return `
     <div class="page-head">
       <div>
@@ -1191,71 +1218,152 @@ function renderNewRun() {
       </div>
     ` : ''}
 
+    <!-- Category / Section Filter Tabs -->
+    <div class="category-tabs-bar">
+      <button type="button" class="cat-tab-btn ${activeRunCat === 'all' ? 'active' : ''}" data-action="set-run-category" data-cat="all">
+        <span>📋 All Payees</span>
+        <span class="cat-tab-count">${catCounts.all}</span>
+      </button>
+      <button type="button" class="cat-tab-btn ${activeRunCat === 'material' ? 'active' : ''}" data-action="set-run-category" data-cat="material">
+        <span>📦 Material & Vendor Bills</span>
+        <span class="cat-tab-count">${catCounts.material}</span>
+      </button>
+      <button type="button" class="cat-tab-btn ${activeRunCat === 'employees' ? 'active' : ''}" data-action="set-run-category" data-cat="employees">
+        <span>👤 Employees & Staff (Salary)</span>
+        <span class="cat-tab-count">${catCounts.employees}</span>
+      </button>
+      <button type="button" class="cat-tab-btn ${activeRunCat === 'contractors' ? 'active' : ''}" data-action="set-run-category" data-cat="contractors">
+        <span>🛠️ Contractors & Services</span>
+        <span class="cat-tab-count">${catCounts.contractors}</span>
+      </button>
+      <button type="button" class="cat-tab-btn ${activeRunCat === 'utilities' ? 'active' : ''}" data-action="set-run-category" data-cat="utilities">
+        <span>🏢 Rent & Utilities</span>
+        <span class="cat-tab-count">${catCounts.utilities}</span>
+      </button>
+    </div>
+
     <div class="card">
       <div class="card-head">
-        <h3>Select Payees <span class="count">${selected.length} selected</span></h3>
+        <h3>
+          ${activeRunCat === 'all' ? 'All Parties' : getCategoryMeta(activeRunCat).label} 
+          <span class="count">${filteredRunList.length}</span>
+        </h3>
         ${filteredRunList.length > 0 ? `
-          <div style="display:flex; gap:8px;">
-            <button type="button" class="btn btn-sm btn-ghost" data-action="select-all-category-run">
-              ⚡ Select All Visible (${filteredRunList.length})
+          <div class="directory-bulk-actions">
+            ${selected.length > 0 ? `<span class="selection-count">${selected.length} selected</span>` : ''}
+            <button type="button" class="btn btn-sm btn-ghost" data-action="toggle-select-all-run">
+              ${allVisibleSelected ? 'Deselect All' : 'Select All'}
             </button>
+            ${selected.length > 0 ? `
+              <button type="button" class="btn btn-sm btn-danger-ghost" data-action="clear-run">
+                Clear All (${selected.length})
+              </button>
+            ` : ''}
           </div>
         ` : ''}
       </div>
-      <div class="card-pad" style="padding-bottom:8px;">
-        <div class="category-tabs-bar" style="margin-bottom:12px; padding-bottom:4px;">
-          <button type="button" class="cat-tab-btn ${activeRunCat === 'all' ? 'active' : ''}" data-action="set-run-category" data-cat="all">
-            <span>All (${catCounts.all})</span>
-          </button>
-          <button type="button" class="cat-tab-btn ${activeRunCat === 'material' ? 'active' : ''}" data-action="set-run-category" data-cat="material">
-            <span>📦 Material Bills (${catCounts.material})</span>
-          </button>
-          <button type="button" class="cat-tab-btn ${activeRunCat === 'employees' ? 'active' : ''}" data-action="set-run-category" data-cat="employees">
-            <span>👤 Employees (${catCounts.employees})</span>
-          </button>
-          <button type="button" class="cat-tab-btn ${activeRunCat === 'contractors' ? 'active' : ''}" data-action="set-run-category" data-cat="contractors">
-            <span>🛠️ Contractors (${catCounts.contractors})</span>
-          </button>
-          <button type="button" class="cat-tab-btn ${activeRunCat === 'utilities' ? 'active' : ''}" data-action="set-run-category" data-cat="utilities">
-            <span>🏢 Utilities (${catCounts.utilities})</span>
-          </button>
-        </div>
+      <div class="card-pad" style="padding-bottom:0;">
         <div class="search-bar">
           ${ICONS.search}
-          <input type="text" placeholder="Search payees to add to this run" value="${escapeHtml(state.search)}" data-bind="search">
+          <input type="text" placeholder="Search by name, bank, or account number" value="${escapeHtml(state.search)}" data-bind="search">
         </div>
       </div>
-      <div class="card-pad" style="padding-top:0;max-height:340px;overflow-y:auto;">
-        ${state.parties.length === 0 ? renderEmptyState({
-          icon: 'empty',
-          title: 'No Parties Available',
-          message: 'Your party directory is empty. Add parties first before starting a payment run.',
-          buttons: [{ label: 'Go to Party Directory', action: 'goto-directory', variant: 'btn-primary' }],
-        }) : (filteredRunList.length === 0 ? renderEmptyState({
-          icon: 'empty',
-          title: 'No Payees Found in this Section',
-          message: 'No parties match the selected category or search query.',
-        }) : filteredRunList.map(p => {
-          const checked = state.run.selectedIds.includes(p.id);
-          const catMeta = getCategoryMeta(p.category || 'material');
-          return `
-            <div class="picker-row">
-              <div class="check ${checked ? 'checked' : ''}" data-action="toggle-party" data-id="${p.id}">
-                ${checked ? ICONS.check : ''}
-              </div>
-              <div class="info">
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <span class="name">${escapeHtml(p.name)}</span>
-                  <span class="cat-badge cat-${catMeta.id}" style="font-size:10.5px; padding:1px 7px;">
-                    ${catMeta.icon} ${escapeHtml(catMeta.shortLabel)}
-                  </span>
+      ${filteredRunList.length === 0 ? (state.parties.length === 0 ? renderEmptyState({
+        icon: 'empty',
+        title: 'No Parties Available',
+        message: 'Your party directory is empty. Add parties first before starting a payment run.',
+        buttons: [{ label: 'Go to Party Directory', action: 'goto-directory', variant: 'btn-primary' }],
+      }) : renderEmptyState({
+        icon: 'empty',
+        title: 'No Payees Found in this Section',
+        message: 'No parties match the selected category or search query.',
+      })) : `
+        <!-- Desktop Table View (Same as Directory with compact scrollable container) -->
+        <div class="desktop-only" id="run-party-table-wrap" style="overflow-x: auto; max-height: 480px; overflow-y: auto; border-top: 1px solid var(--border);">
+          <table style="margin: 0;">
+            <thead style="position: sticky; top: 0; z-index: 2; background: #ffffff; box-shadow: 0 1px 0 var(--border);">
+              <tr>
+                <th class="col-check">
+                  <div class="check table-check ${allVisibleSelected ? 'checked' : ''} ${someVisibleSelected && !allVisibleSelected ? 'indeterminate' : ''}" data-action="toggle-select-all-run" title="${allVisibleSelected ? 'Deselect all' : 'Select all'}">
+                    ${allVisibleSelected ? ICONS.check : (someVisibleSelected ? '<span class="indeterminate-mark">−</span>' : '')}
+                  </div>
+                </th>
+                <th>Particulars</th>
+                <th>Section</th>
+                <th>Bank's Name</th>
+                <th>Account Number</th>
+                <th>Location</th>
+                <th>IFSC Code</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredRunList.map(p => {
+                const rowSelected = state.run.selectedIds.includes(p.id);
+                const catMeta = getCategoryMeta(p.category || 'material');
+                return `
+                <tr class="${rowSelected ? 'row-selected' : ''}">
+                  <td class="col-check">
+                    <div class="check table-check ${rowSelected ? 'checked' : ''}" data-action="toggle-party" data-id="${p.id}" title="${rowSelected ? 'Deselect' : 'Select'}">
+                      ${rowSelected ? ICONS.check : ''}
+                    </div>
+                  </td>
+                  <td><strong>${escapeHtml(p.name)}</strong></td>
+                  <td>
+                    <span class="cat-badge cat-${catMeta.id}">
+                      ${catMeta.icon} ${escapeHtml(catMeta.shortLabel)}
+                    </span>
+                  </td>
+                  <td>${escapeHtml(p.bankName)}</td>
+                  <td class="mono">${renderAccountWithEye(p.accountNo, p.id)}</td>
+                  <td>${escapeHtml(p.location)}</td>
+                  <td class="mono">${escapeHtml(p.ifsc)}</td>
+                </tr>
+              `;}).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Mobile Native Cards View -->
+        <div class="mobile-only mobile-cards-list" id="run-party-mobile-wrap" style="max-height: 440px; overflow-y: auto; padding: 12px; border-top: 1px solid var(--border);">
+          ${filteredRunList.map(p => {
+            const rowSelected = state.run.selectedIds.includes(p.id);
+            const catMeta = getCategoryMeta(p.category || 'material');
+            return `
+              <div class="mobile-party-card ${rowSelected ? 'selected' : ''}">
+                <div class="mobile-card-header">
+                  <div class="check mobile-card-check ${rowSelected ? 'checked' : ''}" data-action="toggle-party" data-id="${p.id}">
+                    ${rowSelected ? ICONS.check : ''}
+                  </div>
+                  <div class="mobile-card-title-wrap">
+                    <h4 class="mobile-card-title">${escapeHtml(p.name)}</h4>
+                    <span class="cat-badge cat-${catMeta.id}" style="width:fit-content; font-size:11px; padding:2px 8px;">
+                      ${catMeta.icon} ${escapeHtml(catMeta.shortLabel)}
+                    </span>
+                  </div>
                 </div>
-                <div class="sub">${escapeHtml(p.bankName)} · ${escapeHtml(p.location)} · ${renderAccountWithEye(p.accountNo, p.id)}</div>
+                <div class="mobile-card-grid">
+                  <div class="mobile-card-field">
+                    <span class="m-label">Bank</span>
+                    <span class="m-val">${escapeHtml(p.bankName)}</span>
+                  </div>
+                  <div class="mobile-card-field">
+                    <span class="m-label">Account No</span>
+                    <span class="m-val mono">${renderAccountWithEye(p.accountNo, p.id)}</span>
+                  </div>
+                  <div class="mobile-card-field">
+                    <span class="m-label">Location</span>
+                    <span class="m-val">${escapeHtml(p.location)}</span>
+                  </div>
+                  <div class="mobile-card-field">
+                    <span class="m-label">IFSC</span>
+                    <span class="m-val mono">${escapeHtml(p.ifsc)}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          `;
-        }).join(''))}
-      </div>
+            `;
+          }).join('')}
+        </div>
+      `}
     </div>
 
     ${selected.length > 0 ? `
@@ -1267,8 +1375,8 @@ function renderNewRun() {
           </div>
         </div>
         <!-- Desktop Amount Sheet -->
-        <div class="desktop-only amount-sheet">
-          <div class="amount-sheet-head">
+        <div class="desktop-only amount-sheet" id="run-amount-sheet-wrap" style="max-height: 320px; overflow-y: auto;">
+          <div class="amount-sheet-head" style="position: sticky; top: 0; z-index: 2; background: #f8fafc; box-shadow: 0 1px 0 var(--border);">
             <span>#</span>
             <span>Payee / Party</span>
             <span>Bank Details</span>
@@ -1304,14 +1412,14 @@ function renderNewRun() {
               <button class="icon-btn danger remove-from-run" data-action="remove-from-run" data-id="${p.id}" title="Remove from this run">${ICONS.x}</button>
             </div>
           `).join('')}
-          <div class="amount-sheet-foot">
+          <div class="amount-sheet-foot" style="position: sticky; bottom: 0; z-index: 2; background: #ffffff; box-shadow: 0 -1px 0 var(--border);">
             <span class="foot-label">Grand Total</span>
             <span class="foot-total num" id="amount-sheet-foot-total">₹ ${formatINR(total)}</span>
           </div>
         </div>
 
         <!-- Mobile Amount Cards View (No horizontal scroll!) -->
-        <div class="mobile-only mobile-amount-list" style="padding: 10px 12px 14px;">
+        <div class="mobile-only mobile-amount-list" style="max-height: 320px; overflow-y: auto; padding: 10px 12px 14px;">
           ${selected.map((p, i) => `
             <div class="mobile-amount-card">
               <div class="m-amt-head">
@@ -2453,62 +2561,103 @@ function renderPartyHistoryModal(partyName) {
 }
 
 function resetQuickAdd() {
-  state.quickAdd = { partyId: '', mode: 'directory', search: '', dropdownOpen: false, dropdownSearch: '' };
+  state.quickAdd = {
+    selectedIds: [],
+    partyId: '',
+    mode: 'directory',
+    dropdownOpen: false,
+    dropdownSearch: '',
+    amounts: {},
+    defaultAmount: ''
+  };
 }
 
 function showViewHistoryModal(h, resetForm = true) {
   if (resetForm) resetQuickAdd();
-  openModal({ type: 'view-history', payload: h });
+  openModal({ type: 'view-history', payload: h }, false);
 }
 
 function renderQuickAddSection(h) {
   const qa = state.quickAdd;
+  if (!qa.selectedIds) qa.selectedIds = qa.partyId ? [qa.partyId] : [];
+  if (!qa.amounts) qa.amounts = {};
+
   const isDirectory = qa.mode !== 'manual';
   const isDropdownOpen = !!qa.dropdownOpen;
 
-  const selectedParty = state.parties.find(p => p.id === qa.partyId);
+  const selectedParties = qa.selectedIds.map(pid => state.parties.find(p => p.id === pid)).filter(Boolean);
   const dropdownSearchVal = qa.dropdownSearch || '';
   const dsQ = dropdownSearchVal.trim().toLowerCase();
 
   const availableParties = state.parties.filter(p => {
-    const matchesSearch =
-      !dsQ || p.name.toLowerCase().includes(dsQ) || p.bankName.toLowerCase().includes(dsQ) || p.accountNo.includes(dsQ) || (p.location && p.location.toLowerCase().includes(dsQ));
-    if (!matchesSearch) return false;
-    const alreadyIn = h.parties.some(hp => hp.accountNo === p.accountNo);
+    const alreadyIn = h.parties.some(hp => (hp.accountNo || '').trim().toLowerCase() === (p.accountNo || '').trim().toLowerCase());
     return !alreadyIn;
   });
 
-  const customDropdownOptionsHtml = availableParties.length === 0
+  const filteredParties = availableParties.filter(p => {
+    if (!dsQ) return true;
+    return (
+      p.name.toLowerCase().includes(dsQ) ||
+      p.bankName.toLowerCase().includes(dsQ) ||
+      p.accountNo.includes(dsQ) ||
+      (p.location && p.location.toLowerCase().includes(dsQ))
+    );
+  });
+
+  const allFilteredSelected = filteredParties.length > 0 && filteredParties.every(p => qa.selectedIds.includes(p.id));
+
+  const customDropdownOptionsHtml = filteredParties.length === 0
     ? `<div class="custom-dropdown-empty">No matching parties found</div>`
-    : availableParties.map(p => {
-        const isSelected = p.id === qa.partyId;
+    : filteredParties.map(p => {
+        const isSelected = qa.selectedIds.includes(p.id);
         const catMeta = getCategoryMeta(p.category || 'material');
         return `
-          <div class="custom-dropdown-option ${isSelected ? 'selected' : ''}" data-action="select-quick-add-party" data-id="${p.id}">
-            <div class="custom-dropdown-option-name">
-              <span>${escapeHtml(p.name)}</span>
-              <span class="cat-badge cat-${catMeta.id}" style="font-size:10px; padding:1px 6px;">${catMeta.icon} ${escapeHtml(catMeta.shortLabel)}</span>
+          <div class="custom-dropdown-option ${isSelected ? 'selected' : ''}" data-action="toggle-quick-add-party-select" data-id="${p.id}" data-search="${escapeHtml((p.name + ' ' + p.bankName + ' ' + p.accountNo + ' ' + (p.location || '')).toLowerCase())}">
+            <div class="opt-checkbox">
+              ${isSelected ? `<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="3" fill="none"><path d="M20 6 9 17l-5-5"/></svg>` : ''}
             </div>
-            <div class="custom-dropdown-option-sub">
-              ${escapeHtml(p.bankName)} · ${escapeHtml(p.location)} · <span class="mono">${renderAccountWithEye(p.accountNo, p.id)}</span>
+            <div class="option-main" style="flex:1; min-width:0;">
+              <span class="option-name">${escapeHtml(p.name)}</span>
+              <span class="option-bank">${escapeHtml(p.bankName)} · ${escapeHtml(p.location)} · <span class="mono">${renderAccountWithEye(p.accountNo, p.id)}</span></span>
             </div>
+            <span class="cat-badge cat-${catMeta.id}" style="font-size:10px; padding:2px 7px; margin-left:auto; flex-shrink:0;">${catMeta.icon} ${escapeHtml(catMeta.shortLabel)}</span>
           </div>
         `;
       }).join('');
 
+  let triggerText = '-- Choose Parties from Directory --';
+  if (selectedParties.length === 1) {
+    triggerText = `${escapeHtml(selectedParties[0].name)} (${escapeHtml(selectedParties[0].bankName)})`;
+  } else if (selectedParties.length > 1) {
+    triggerText = `✓ ${selectedParties.length} Parties Selected`;
+  }
+
   const dropdownHtml = `
-    <div class="quick-add-custom-select-container">
-      <div class="custom-dropdown-trigger ${isDropdownOpen ? 'open' : ''}" data-action="toggle-quick-add-dropdown">
-        <span class="custom-dropdown-selected-text">
-          ${selectedParty ? escapeHtml(selectedParty.name) + ' (' + escapeHtml(selectedParty.bankName) + ')' : '-- Choose a Party --'}
+    <div class="quick-add-custom-select-container ${isDropdownOpen ? 'open' : ''}">
+      <button type="button" class="quick-add-select-trigger custom-dropdown-trigger" data-action="toggle-quick-add-dropdown">
+        <span class="trigger-text custom-dropdown-selected-text">
+          ${triggerText}
         </span>
-        <span class="custom-dropdown-arrow">▾</span>
-      </div>
+        <span class="trigger-arrow custom-dropdown-arrow">▾</span>
+      </button>
       ${isDropdownOpen ? `
-        <div class="custom-dropdown-menu" data-stop>
+        <div class="custom-dropdown-panel custom-dropdown-menu" data-stop>
           <div class="custom-dropdown-search-wrap">
             ${ICONS.search}
-            <input type="text" class="custom-dropdown-search-input" id="quick-add-dropdown-search" placeholder="Type party name, bank or acct..." value="${escapeHtml(dropdownSearchVal)}">
+            <input type="text" class="custom-dropdown-search-input" id="quick-add-dropdown-search" placeholder="Type party name, bank or acct..." value="${escapeHtml(dropdownSearchVal)}" autocomplete="off">
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 14px; background:#f8fafc; border-bottom:1px solid var(--border); font-size:12px;">
+            <span style="color:var(--secondary-text);">${selectedParties.length} of ${availableParties.length} selected</span>
+            <div style="display:flex; gap:12px;">
+              <button type="button" class="btn-link" data-action="quick-add-select-all-filtered" style="font-size:11.5px; color:var(--accent); cursor:pointer; background:none; border:none; padding:0; font-weight:600;">
+                ${allFilteredSelected ? 'Deselect All' : 'Select All Visible'}
+              </button>
+              ${selectedParties.length > 0 ? `
+                <button type="button" class="btn-link" data-action="quick-add-clear-selection" style="font-size:11.5px; color:var(--danger); cursor:pointer; background:none; border:none; padding:0; font-weight:600;">
+                  Clear
+                </button>
+              ` : ''}
+            </div>
           </div>
           <div class="custom-dropdown-options-list">
             ${customDropdownOptionsHtml}
@@ -2517,27 +2666,6 @@ function renderQuickAddSection(h) {
       ` : ''}
     </div>
   `;
-
-  const detailHtml = selectedParty ? `
-    <div class="quick-add-details">
-      <div class="quick-add-detail-item">
-        <span class="detail-label">Bank Name</span>
-        <span class="detail-val">${escapeHtml(selectedParty.bankName.toUpperCase())}</span>
-      </div>
-      <div class="quick-add-detail-item">
-        <span class="detail-label">Account Number</span>
-        <span class="detail-val mono">${renderAccountWithEye(selectedParty.accountNo, selectedParty.id)}</span>
-      </div>
-      <div class="quick-add-detail-item">
-        <span class="detail-label">Bank Location</span>
-        <span class="detail-val">${escapeHtml(selectedParty.location.toUpperCase())}</span>
-      </div>
-      <div class="quick-add-detail-item">
-        <span class="detail-label">IFSC Code</span>
-        <span class="detail-val mono">${escapeHtml(selectedParty.ifsc.toUpperCase())}</span>
-      </div>
-    </div>
-  ` : '';
 
   return `
     <div class="quick-add-payment-box">
@@ -2550,25 +2678,106 @@ function renderQuickAddSection(h) {
 
       ${isDirectory ? `
         <div class="quick-add-directory-mode">
-          <div class="quick-add-row-layout">
-            <div class="quick-add-col-payee">
-              <label class="quick-add-label">Select Party from Directory</label>
-              ${dropdownHtml}
-            </div>
-            <div class="quick-add-col-amount">
-              <label class="quick-add-label">Amount (₹)</label>
-              <div class="currency-input">
-                <span class="currency-symbol">₹</span>
-                <input type="number" id="quick-add-directory-amount" min="1" class="amount-input" placeholder="e.g. 50000" inputmode="numeric">
+          ${selectedParties.length <= 1 ? `
+            <div class="quick-add-row-layout">
+              <div class="quick-add-col-payee">
+                <label class="quick-add-label">Select Party / Parties from Directory</label>
+                ${dropdownHtml}
+              </div>
+              <div class="quick-add-col-amount">
+                <label class="quick-add-label">Amount (₹)</label>
+                <div class="currency-input">
+                  <span class="currency-symbol">₹</span>
+                  <input type="number" id="quick-add-directory-amount" min="1" class="amount-input" placeholder="e.g. 50000" inputmode="numeric" value="${selectedParties.length === 1 ? (qa.amounts[selectedParties[0].id] || '') : ''}">
+                </div>
+              </div>
+              <div class="quick-add-col-btn">
+                <button type="button" class="btn btn-primary quick-add-submit" data-action="confirm-quick-add-directory" data-id="${h.id}" ${selectedParties.length === 0 ? 'disabled style="opacity:0.6;"' : ''}>
+                  ${ICONS.plus} Add Payment
+                </button>
               </div>
             </div>
-            <div class="quick-add-col-btn">
-              <button type="button" class="btn btn-primary quick-add-submit" data-action="confirm-quick-add-directory" data-id="${h.id}">
-                ${ICONS.plus} Add Payment
-              </button>
+            ${selectedParties.length === 1 ? `
+              <div class="quick-add-details">
+                <div class="quick-add-detail-item">
+                  <span class="detail-label">Bank Name</span>
+                  <span class="detail-val">${escapeHtml(selectedParties[0].bankName.toUpperCase())}</span>
+                </div>
+                <div class="quick-add-detail-item">
+                  <span class="detail-label">Account Number</span>
+                  <span class="detail-val mono">${renderAccountWithEye(selectedParties[0].accountNo, selectedParties[0].id)}</span>
+                </div>
+                <div class="quick-add-detail-item">
+                  <span class="detail-label">Bank Location</span>
+                  <span class="detail-val">${escapeHtml(selectedParties[0].location.toUpperCase())}</span>
+                </div>
+                <div class="quick-add-detail-item">
+                  <span class="detail-label">IFSC Code</span>
+                  <span class="detail-val mono">${escapeHtml(selectedParties[0].ifsc.toUpperCase())}</span>
+                </div>
+              </div>
+            ` : ''}
+          ` : `
+            <!-- Multi-Select Mode -->
+            <div class="quick-add-row-layout" style="align-items:flex-end;">
+              <div class="quick-add-col-payee" style="flex:2;">
+                <label class="quick-add-label">Select Parties from Directory (${selectedParties.length} selected)</label>
+                ${dropdownHtml}
+              </div>
+              <div class="quick-add-col-amount" style="flex:1;">
+                <label class="quick-add-label">Set Amount for All (₹)</label>
+                <div class="currency-input">
+                  <span class="currency-symbol">₹</span>
+                  <input type="number" id="quick-add-bulk-amount" min="1" class="amount-input" placeholder="e.g. 50000" inputmode="numeric" value="${qa.defaultAmount || ''}">
+                </div>
+              </div>
+              <div class="quick-add-col-btn">
+                <button type="button" class="btn btn-ghost" data-action="apply-quick-add-bulk-amount" style="white-space:nowrap; height:44px;">
+                  Apply to All
+                </button>
+              </div>
             </div>
-          </div>
-          ${detailHtml}
+
+            <div style="margin-top:14px; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#ffffff;">
+              <div style="max-height:220px; overflow-y:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                  <thead>
+                    <tr style="background:rgba(0,0,0,0.02); border-bottom:1px solid var(--border); text-align:left;">
+                      <th style="padding:10px 14px; font-weight:600; color:var(--secondary-text); font-size:11.5px; text-transform:uppercase;">Payee / Party</th>
+                      <th style="padding:10px 14px; font-weight:600; color:var(--secondary-text); font-size:11.5px; text-transform:uppercase;">Bank & A/C</th>
+                      <th style="padding:10px 14px; font-weight:600; color:var(--secondary-text); font-size:11.5px; text-transform:uppercase; text-align:right; width:160px;">Amount (₹)</th>
+                      <th style="width:40px;"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${selectedParties.map(p => `
+                      <tr style="border-bottom:1px solid rgba(0,0,0,0.03);">
+                        <td style="padding:10px 14px; font-weight:600; color:var(--primary-text);">${escapeHtml(p.name)}</td>
+                        <td style="padding:10px 14px; color:var(--secondary-text); font-size:12px;">${escapeHtml(p.bankName)} · <span class="mono">${renderAccountWithEye(p.accountNo, p.id)}</span></td>
+                        <td style="padding:10px 14px; text-align:right;">
+                          <div class="currency-input" style="height:36px;">
+                            <span class="currency-symbol" style="font-size:12px;">₹</span>
+                            <input type="number" class="quick-add-multi-amt-input amount-input" data-party-id="${p.id}" min="1" placeholder="0" style="height:36px; font-size:13px; font-weight:600; text-align:right; padding:0 8px 0 24px;" value="${qa.amounts[p.id] || qa.defaultAmount || ''}">
+                          </div>
+                        </td>
+                        <td style="padding:10px 8px; text-align:center;">
+                          <button type="button" class="btn-icon" data-action="remove-quick-add-selected-party" data-id="${p.id}" style="color:var(--danger); border:none; background:none; cursor:pointer; font-size:14px;" title="Remove">✕</button>
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 18px; background:rgba(0,0,0,0.02); border-top:1px solid var(--border);">
+                <div style="font-size:13px; color:var(--secondary-text);">
+                  Ready to add <b>${selectedParties.length}</b> payee${selectedParties.length === 1 ? '' : 's'} to this voucher
+                </div>
+                <button type="button" class="btn btn-primary" data-action="confirm-quick-add-multiple" data-id="${h.id}">
+                  ${ICONS.plus} Add ${selectedParties.length} Payments to Voucher
+                </button>
+              </div>
+            </div>
+          `}
         </div>
       ` : `
         <div class="quick-add-manual-mode">
@@ -2598,6 +2807,18 @@ function renderQuickAddSection(h) {
                 <span class="val-badge" id="quick-add-manual-ifsc-val"></span>
               </div>
               <input type="text" id="quick-add-manual-ifsc" placeholder="e.g. MAHB0006456" autocomplete="off" style="text-transform: uppercase;">
+            </div>
+            <div class="field full" style="display:flex; align-items:center; gap:20px; flex-wrap:wrap; margin-top:6px; padding:12px 16px; background:rgba(0,0,0,0.02); border:1px solid var(--border); border-radius:10px;">
+              <label style="display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--primary-text); cursor:pointer; margin:0;">
+                <input type="checkbox" id="quick-add-manual-save-dir" checked style="width:16px; height:16px; accent-color:var(--accent); cursor:pointer;">
+                Save this party to Directory / Parties list
+              </label>
+              <div style="display:inline-flex; align-items:center; gap:8px;">
+                <span style="font-size:12px; font-weight:500; color:var(--secondary-text);">Category:</span>
+                <select id="quick-add-manual-category" style="height:34px; padding:0 10px; font-size:12.5px; border:1px solid var(--border); border-radius:8px; background:#ffffff; color:var(--primary-text); outline:none; font-family:inherit;">
+                  ${PARTY_CATEGORIES.map(c => `<option value="${c.id}">${c.icon} ${c.shortLabel}</option>`).join('')}
+                </select>
+              </div>
             </div>
             <div class="field full quick-add-manual-amount-row">
               <label>Amount (₹)</label>
@@ -2786,6 +3007,7 @@ function formatDateDDMMYYYY(isoDate) {
 }
 
 function renderImportModal() {
+  const currentCat = (state.directoryCategory && state.directoryCategory !== 'all') ? state.directoryCategory : 'material';
   return `
     <div class="modal-backdrop" data-action="close-modal">
       <div class="modal" style="max-width:540px;" data-stop>
@@ -2795,10 +3017,10 @@ function renderImportModal() {
         </div>
         <div class="modal-body">
           <div style="margin-bottom:16px;">
-            <label style="font-size:12.5px; font-weight:600; color:var(--secondary-text); display:block; margin-bottom:6px;">Assign to Section / List:</label>
+            <label style="font-size:12.5px; font-weight:600; color:var(--secondary-text); display:block; margin-bottom:6px;">Assign to Directory Category / List:</label>
             <select id="import-category-select" style="width:100%; height:42px; border:1.5px solid var(--border); border-radius:10px; padding:0 12px; font-family:inherit; font-size:13.5px; background:#ffffff; color:var(--primary-text); outline:none;">
               ${PARTY_CATEGORIES.map(c => `
-                <option value="${c.id}">${c.icon} ${c.label}</option>
+                <option value="${c.id}" ${c.id === currentCat ? 'selected' : ''}>${c.icon} ${c.label}</option>
               `).join('')}
             </select>
           </div>
@@ -2807,9 +3029,12 @@ function renderImportModal() {
             <p>Drag & drop your existing bank sheet here or <b>browse files</b></p>
             <input type="file" id="excel-file-input" accept=".xlsx, .xls">
           </div>
-          <div id="import-preview-box" style="display:none;">
-            <h4 style="margin:0 0 12px;font-weight:600;font-size:14px;">Parsed Payees Preview</h4>
-            <div style="max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; margin-bottom:20px;" id="import-preview-list">
+          <div id="import-preview-box" style="display:none; margin-top:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+              <h4 style="margin:0;font-weight:600;font-size:14px;">Parsed Payees Preview</h4>
+              <span id="import-preview-cat-badge" style="font-size:11.5px; font-weight:600; color:var(--accent);"></span>
+            </div>
+            <div style="max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; margin-bottom:16px;" id="import-preview-list">
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <span class="hint" id="parsed-count-lbl"></span>
@@ -3028,6 +3253,37 @@ function attachHandlers() {
         selectedOpt.scrollIntoView({ block: 'nearest' });
       }, 0);
     }
+  }
+
+  const qaSearch = app.querySelector('#quick-add-dropdown-search');
+  if (qaSearch) {
+    qaSearch.addEventListener('input', (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      state.quickAdd.dropdownSearch = e.target.value;
+      const list = app.querySelector('.custom-dropdown-options-list');
+      if (list) {
+        const options = list.querySelectorAll('.custom-dropdown-option');
+        let visibleCount = 0;
+        options.forEach(opt => {
+          const s = (opt.dataset.search || opt.textContent).toLowerCase();
+          const match = !q || s.includes(q);
+          opt.style.display = match ? 'flex' : 'none';
+          if (match) visibleCount++;
+        });
+        let emptyEl = list.querySelector('.custom-dropdown-empty');
+        if (visibleCount === 0) {
+          if (!emptyEl) {
+            emptyEl = document.createElement('div');
+            emptyEl.className = 'custom-dropdown-empty';
+            emptyEl.textContent = 'No matching parties found';
+            list.appendChild(emptyEl);
+          }
+          emptyEl.style.display = 'block';
+        } else if (emptyEl) {
+          emptyEl.style.display = 'none';
+        }
+      }
+    });
   }
 
   if (!window.__dropdownOutsideClickListenerRegistered) {
@@ -3360,6 +3616,19 @@ async function handleExcelUpload(file) {
       return;
     }
 
+    // Smart category suggestion based on filename if not already set by user
+    const catSelect = document.getElementById('import-category-select');
+    const fname = (file.name || '').toLowerCase();
+    if (catSelect) {
+      if (/employ|staff|salary|salaries|worker|labour/i.test(fname)) {
+        catSelect.value = 'employees';
+      } else if (/contract|service|agency/i.test(fname)) {
+        catSelect.value = 'contractors';
+      } else if (/utility|bill|rent|office/i.test(fname)) {
+        catSelect.value = 'utilities';
+      }
+    }
+
     // Set of existing normalized accounts in directory
     const existingAccounts = new Set(
       state.parties.map(p => (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase())
@@ -3381,6 +3650,22 @@ async function handleExcelUpload(file) {
     const previewBox = document.getElementById('import-preview-box');
     const countLbl = document.getElementById('parsed-count-lbl');
     const commitBtn = document.getElementById('commit-import-btn');
+    const catBadge = document.getElementById('import-preview-cat-badge');
+
+    const updateCategoryUI = () => {
+      const selectedCat = catSelect ? catSelect.value : 'material';
+      const meta = getCategoryMeta(selectedCat);
+      if (catBadge) {
+        catBadge.innerHTML = `Assigning to: <b>${meta.icon} ${escapeHtml(meta.shortLabel)}</b>`;
+      }
+      if (commitBtn && newParties.length > 0) {
+        commitBtn.innerText = `Confirm Import (${newParties.length}) to ${meta.shortLabel}`;
+      }
+    };
+
+    if (catSelect) {
+      catSelect.onchange = updateCategoryUI;
+    }
     
     if (previewList && previewBox && countLbl && commitBtn) {
       if (newParties.length === 0) {
@@ -3395,15 +3680,15 @@ async function handleExcelUpload(file) {
         commitBtn.innerText = 'No New Parties to Import';
       } else {
         commitBtn.disabled = false;
-        commitBtn.innerText = `Confirm Import (${newParties.length})`;
+        updateCategoryUI();
 
         let html = newParties.map(p => `
           <div style="padding: 10px 14px; border-bottom: 1px solid var(--border); font-size:13px; display:flex; justify-content:space-between; align-items:center;">
             <div>
-              <div style="font-weight:600; color:#ffffff;">${escapeHtml(p.name)}</div>
+              <div style="font-weight:600; color:var(--primary-text);">${escapeHtml(p.name)}</div>
               <div style="color:var(--secondary-text); margin-top:2px;">${escapeHtml(p.bankName)} · A/C: ${escapeHtml(p.accountNo)} · IFSC: ${escapeHtml(p.ifsc)}</div>
             </div>
-            <span style="font-size:10.5px; padding:2px 8px; border-radius:10px; background:rgba(34,197,94,0.15); color:#4ade80; font-weight:600;">NEW</span>
+            <span style="font-size:10.5px; padding:2px 8px; border-radius:10px; background:rgba(34,197,94,0.15); color:#16a34a; font-weight:600;">NEW</span>
           </div>
         `).join('');
 
@@ -3423,7 +3708,7 @@ async function handleExcelUpload(file) {
           const currentAccountSet = new Set(
             state.parties.map(p => (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase())
           );
-          const selectedCategory = document.getElementById('import-category-select')?.value || 'material';
+          const selectedCategory = catSelect?.value || 'material';
 
           newParties.forEach(tp => {
             const normAcct = (tp.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase();
@@ -3825,19 +4110,29 @@ function handleAction(action, el, e) {
       render();
       break;
 
+    case 'toggle-select-all-run':
     case 'select-all-category-run': {
       const activeRunCat = state.runCategory || 'all';
       const q = state.search.trim().toLowerCase();
       const filteredRunList = state.parties.filter(p => {
         const partyCat = p.category || 'material';
         if (activeRunCat !== 'all' && partyCat !== activeRunCat) return false;
-        return !q || p.name.toLowerCase().includes(q) || p.bankName.toLowerCase().includes(q);
+        return !q || p.name.toLowerCase().includes(q) || p.bankName.toLowerCase().includes(q) || p.accountNo.includes(q) || (p.location && p.location.toLowerCase().includes(q));
       });
-      filteredRunList.forEach(p => {
-        if (!state.run.selectedIds.includes(p.id)) {
-          state.run.selectedIds.push(p.id);
-        }
-      });
+      const allVisible = filteredRunList.length > 0 && filteredRunList.every(p => state.run.selectedIds.includes(p.id));
+      if (allVisible) {
+        const visibleIds = new Set(filteredRunList.map(p => p.id));
+        state.run.selectedIds = state.run.selectedIds.filter(pid => !visibleIds.has(pid));
+        visibleIds.forEach(vid => {
+          delete state.run.amounts[vid];
+        });
+      } else {
+        filteredRunList.forEach(p => {
+          if (!state.run.selectedIds.includes(p.id)) {
+            state.run.selectedIds.push(p.id);
+          }
+        });
+      }
       render();
       break;
     }
@@ -3903,6 +4198,7 @@ function handleAction(action, el, e) {
       render();
       break;
 
+    case 'toggle-quick-add-dropdown':
     case 'toggle-custom-dropdown': {
       state.quickAdd.dropdownOpen = !state.quickAdd.dropdownOpen;
       if (state.quickAdd.dropdownOpen) {
@@ -3912,17 +4208,141 @@ function handleAction(action, el, e) {
       break;
     }
 
+    case 'toggle-quick-add-party-select': {
+      if (el.dataset.disabled === 'true') break;
+      if (!state.quickAdd.selectedIds) state.quickAdd.selectedIds = [];
+      const idx = state.quickAdd.selectedIds.indexOf(id);
+      if (idx > -1) {
+        state.quickAdd.selectedIds.splice(idx, 1);
+      } else {
+        state.quickAdd.selectedIds.push(id);
+      }
+      state.quickAdd.partyId = state.quickAdd.selectedIds[0] || '';
+      render();
+      break;
+    }
+
+    case 'select-quick-add-party':
     case 'select-custom-dropdown-party': {
       if (el.dataset.disabled === 'true') break;
+      state.quickAdd.selectedIds = [id];
       state.quickAdd.partyId = id;
       state.quickAdd.dropdownOpen = false;
       render();
       break;
     }
 
+    case 'quick-add-select-all-filtered': {
+      const h = state.modal?.payload;
+      if (!h) break;
+      const dsQ = (state.quickAdd.dropdownSearch || '').trim().toLowerCase();
+      const availableParties = state.parties.filter(p => {
+        const alreadyIn = h.parties.some(hp => (hp.accountNo || '').trim().toLowerCase() === (p.accountNo || '').trim().toLowerCase());
+        return !alreadyIn;
+      });
+      const filteredParties = availableParties.filter(p => {
+        if (!dsQ) return true;
+        return (
+          p.name.toLowerCase().includes(dsQ) ||
+          p.bankName.toLowerCase().includes(dsQ) ||
+          p.accountNo.includes(dsQ) ||
+          (p.location && p.location.toLowerCase().includes(dsQ))
+        );
+      });
+      const allFilteredSelected = filteredParties.length > 0 && filteredParties.every(p => (state.quickAdd.selectedIds || []).includes(p.id));
+      if (allFilteredSelected) {
+        const filteredIds = new Set(filteredParties.map(p => p.id));
+        state.quickAdd.selectedIds = (state.quickAdd.selectedIds || []).filter(pid => !filteredIds.has(pid));
+      } else {
+        if (!state.quickAdd.selectedIds) state.quickAdd.selectedIds = [];
+        filteredParties.forEach(p => {
+          if (!state.quickAdd.selectedIds.includes(p.id)) {
+            state.quickAdd.selectedIds.push(p.id);
+          }
+        });
+      }
+      state.quickAdd.partyId = state.quickAdd.selectedIds[0] || '';
+      render();
+      break;
+    }
+
+    case 'quick-add-clear-selection': {
+      state.quickAdd.selectedIds = [];
+      state.quickAdd.partyId = '';
+      render();
+      break;
+    }
+
+    case 'remove-quick-add-selected-party': {
+      state.quickAdd.selectedIds = (state.quickAdd.selectedIds || []).filter(pid => pid !== id);
+      state.quickAdd.partyId = state.quickAdd.selectedIds[0] || '';
+      render();
+      break;
+    }
+
+    case 'apply-quick-add-bulk-amount': {
+      const bulkAmtInput = document.getElementById('quick-add-bulk-amount');
+      const val = bulkAmtInput ? Number(bulkAmtInput.value) : 0;
+      if (val > 0) {
+        state.quickAdd.defaultAmount = val;
+        document.querySelectorAll('.quick-add-multi-amt-input').forEach(inp => {
+          inp.value = val;
+          const pid = inp.dataset.partyId;
+          if (pid) state.quickAdd.amounts[pid] = val;
+        });
+        showToast(`Applied ₹ ${formatINR(val)} to all selected payees`);
+      } else {
+        showToast('Please enter a valid amount to apply');
+      }
+      break;
+    }
+
+    case 'confirm-quick-add-multiple': {
+      const h = state.history.find(x => x.id === id);
+      if (!h) break;
+      const selectedParties = (state.quickAdd.selectedIds || []).map(pid => state.parties.find(p => p.id === pid)).filter(Boolean);
+      if (!selectedParties.length) {
+        showToast('Please select at least one party.');
+        return;
+      }
+
+      const amountsMap = {};
+      let hasInvalidAmount = false;
+      document.querySelectorAll('.quick-add-multi-amt-input').forEach(inp => {
+        const pid = inp.dataset.partyId;
+        const amt = Number(inp.value);
+        if (!amt || amt <= 0) {
+          hasInvalidAmount = true;
+        }
+        amountsMap[pid] = amt;
+      });
+
+      if (hasInvalidAmount) {
+        showToast('Please enter a valid amount (> 0) for every selected payee.');
+        return;
+      }
+
+      selectedParties.forEach(party => {
+        h.parties.push({
+          name: party.name,
+          bankName: party.bankName,
+          accountNo: party.accountNo,
+          location: party.location,
+          ifsc: party.ifsc,
+          amount: amountsMap[party.id] || 0
+        });
+      });
+
+      h.total = h.parties.reduce((sum, p) => sum + p.amount, 0);
+      persistHistory();
+      showToast(`Added ${selectedParties.length} payments to voucher.`);
+      showViewHistoryModal(h, true);
+      break;
+    }
+
     case 'confirm-quick-add-directory': {
       const amtInput = document.getElementById('quick-add-directory-amount');
-      const partyId = state.quickAdd.partyId;
+      const partyId = (state.quickAdd.selectedIds && state.quickAdd.selectedIds[0]) || state.quickAdd.partyId;
       const amount = amtInput ? Number(amtInput.value) : 0;
       
       if (!partyId) {
@@ -3960,6 +4380,8 @@ function handleAction(action, el, e) {
       const loc = document.getElementById('quick-add-manual-loc')?.value.trim();
       const ifsc = document.getElementById('quick-add-manual-ifsc')?.value.trim().toUpperCase();
       const amount = Number(document.getElementById('quick-add-manual-amount')?.value) || 0;
+      const saveToDir = document.getElementById('quick-add-manual-save-dir')?.checked;
+      const category = document.getElementById('quick-add-manual-category')?.value || 'material';
       
       if (!name || !bank || !acct || !loc || !ifsc) {
         showToast('Please fill all payee details.');
@@ -3969,6 +4391,23 @@ function handleAction(action, el, e) {
         showToast('Please enter a valid amount.');
         return;
       }
+
+      if (saveToDir) {
+        const normAcct = acct.replace(/[\s-]+/g, '').toLowerCase();
+        const exists = state.parties.some(p => (p.accountNo || '').replace(/[\s-]+/g, '').toLowerCase() === normAcct);
+        if (!exists) {
+          state.parties.push({
+            id: uid(),
+            name,
+            bankName: bank,
+            accountNo: acct,
+            location: loc,
+            ifsc,
+            category
+          });
+          persistParties();
+        }
+      }
       
       const h = state.history.find(x => x.id === id);
       if (h) {
@@ -3977,7 +4416,7 @@ function handleAction(action, el, e) {
         });
         h.total = h.parties.reduce((sum, p) => sum + p.amount, 0);
         persistHistory();
-        showToast('Manual payment added to voucher.');
+        showToast(saveToDir ? 'Payment added & saved to Directory' : 'Payment added to voucher');
         showViewHistoryModal(h, true);
       }
       break;

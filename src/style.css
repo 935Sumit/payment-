@@ -763,7 +763,8 @@ tbody tr:hover {
   position: relative;
   width: 100%;
 }
-.quick-add-select-trigger {
+.quick-add-select-trigger,
+.custom-dropdown-trigger {
   width: 100%;
   height: 44px;
   padding: 10px 16px;
@@ -783,25 +784,33 @@ tbody tr:hover {
   gap: 12px;
 }
 .quick-add-select-trigger:focus,
-.quick-add-custom-select-container.open .quick-add-select-trigger {
+.custom-dropdown-trigger:focus,
+.quick-add-custom-select-container.open .quick-add-select-trigger,
+.quick-add-custom-select-container.open .custom-dropdown-trigger {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
 }
-.quick-add-select-trigger .trigger-text {
+.quick-add-select-trigger .trigger-text,
+.custom-dropdown-trigger .trigger-text,
+.custom-dropdown-trigger .custom-dropdown-selected-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.quick-add-select-trigger .trigger-arrow {
+.quick-add-select-trigger .trigger-arrow,
+.custom-dropdown-trigger .trigger-arrow,
+.custom-dropdown-trigger .custom-dropdown-arrow {
   color: var(--secondary-text);
   transition: transform 0.2s ease;
   flex-shrink: 0;
 }
-.quick-add-custom-select-container.open .trigger-arrow {
+.quick-add-custom-select-container.open .trigger-arrow,
+.quick-add-custom-select-container.open .custom-dropdown-arrow {
   transform: rotate(180deg);
   color: var(--accent);
 }
-.custom-dropdown-panel {
+.custom-dropdown-panel,
+.custom-dropdown-menu {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
@@ -809,18 +818,20 @@ tbody tr:hover {
   background: #ffffff;
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: var(--shadow-lg), 0 12px 30px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-lg), 0 14px 35px rgba(0, 0, 0, 0.1);
   z-index: 999;
   overflow: hidden;
-  animation: slideDown 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
 }
 .custom-dropdown-search-wrap {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.01);
+  background: #f8fafc;
+  flex-shrink: 0;
 }
 .custom-dropdown-search-wrap svg {
   width: 16px;
@@ -844,16 +855,36 @@ tbody tr:hover {
 .custom-dropdown-options-list {
   max-height: 240px;
   overflow-y: auto;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
 }
 .custom-dropdown-option {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 11px 16px;
+  padding: 10px 14px;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+  gap: 10px;
+}
+.custom-dropdown-option .opt-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #ffffff;
   transition: var(--transition);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.02);
-  gap: 12px;
+  color: #ffffff;
+}
+.custom-dropdown-option.selected .opt-checkbox {
+  background: var(--accent);
+  border-color: var(--accent);
 }
 .custom-dropdown-option:last-child {
   border-bottom: none;
@@ -1065,7 +1096,6 @@ tbody tr:hover {
   justify-content: center;
   z-index: 100;
   padding: 24px;
-  animation: fadeIn 0.2s ease-out;
 }
 .modal {
   background: var(--surface);
@@ -1076,7 +1106,6 @@ tbody tr:hover {
   box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.8);
   max-height: 90vh;
   overflow-y: auto;
-  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .modal-head {
   display: flex;
