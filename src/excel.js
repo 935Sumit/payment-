@@ -1,6 +1,30 @@
 import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
-import { amountToWordsLine } from './words';
+import fileSaver from 'file-saver';
+const saveAs = fileSaver?.saveAs || fileSaver;
+import { amountToWordsLine } from './words.js';
+
+export function getCellValueString(val) {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'object') {
+    if (val.text !== undefined) return String(val.text).trim();
+    if (val.result !== undefined) return String(val.result).trim();
+    if (Array.isArray(val.richText)) {
+      return val.richText.map(t => t.text || '').join('').trim();
+    }
+  }
+  if (typeof val === 'number') {
+    return Number.isInteger(val) ? val.toString() : val.toFixed(0);
+  }
+  return String(val).trim();
+}
+
+function cleanHeaderToken(str) {
+  return String(str || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, ' ')
+    .replace(/\s+/g, ' ');
+}
 
 export async function parseExcelParties(file) {
   const workbook = new ExcelJS.Workbook();
@@ -17,78 +41,182 @@ export async function parseExcelParties(file) {
     bankName: -1,
     accountNo: -1,
     location: -1,
-    ifsc: -1
+    ifsc: -1,
+    srNo: -1
   };
   
-  // Find headers by reading rows
+  // Find header row by scoring rows up to row 15
+  let maxScore = 0;
+  let bestHeaderRow = null;
+  let bestColIndices = { ...colIndices };
+
   worksheet.eachRow((row, rowNumber) => {
-    if (headerRow) return;
+    if (rowNumber > 15) return;
     
     const vals = row.values;
     if (!vals || vals.length === 0) return;
     
+    const currentIndices = { name: -1, bankName: -1, accountNo: -1, location: -1, ifsc: -1, srNo: -1 };
+    let score = 0;
+
     for (let i = 1; i < vals.length; i++) {
-      const v = String(vals[i] || '').trim().toLowerCase();
-      if (!v) continue;
-      
-      if (v.includes('ifsc') && colIndices.ifsc === -1) {
-        colIndices.ifsc = i;
-      } else if ((v.includes('account') || v.includes('acc number') || v.includes('acc no') || v.includes('ac no') || v.includes('numb')) && colIndices.accountNo === -1) {
-        colIndices.accountNo = i;
-      } else if ((v.includes('location') || v.includes('branch')) && colIndices.location === -1) {
-        colIndices.location = i;
-      } else if (v.includes('bank') && colIndices.bankName === -1) {
-        colIndices.bankName = i;
-      } else if ((v.includes('parti') || v.includes('particular') || v.includes('beneficiary') || v.includes('name')) && colIndices.name === -1) {
-        colIndices.name = i;
+      const cellText = getCellValueString(vals[i]);
+      if (!cellText) continue;
+      const h = cleanHeaderToken(cellText);
+
+      // Check Sr / Serial Number first (to strictly prevent matching as account number)
+      const isSrNo = /\b(sr|serial|sl|sno|srno|s no|sl no|seq|sr num)\b/.test(h);
+      if (isSrNo && currentIndices.srNo === -1) {
+        currentIndices.srNo = i;
+        score += 1;
+        continue;
+      }
+
+      // Check IFSC
+      const isIfsc = /\b(ifsc|ifs)\b/.test(h);
+      if (isIfsc && currentIndices.ifsc === -1) {
+        currentIndices.ifsc = i;
+        score += 3;
+        continue;
+      }
+
+      // Check Bank Account Number
+      const isAccount = !isSrNo && !/\b(phone|mobile|contact|aadhaar|aadhar|pan|cheque|chq|voucher|bill|invoice|id|emp id)\b/.test(h) && (
+        /\b(bank\s*)?(a\s*c|acc|acct|account)\s*(no|num|numb|number|code)?\b/.test(h) ||
+        /\b(a\s*c\s*no|acc\s*no|ac\s*no|acct\s*no)\b/.test(h) ||
+        /\b(bank\s*account|bank\s*a\s*c)\b/.test(h)
+      );
+      if (isAccount && currentIndices.accountNo === -1) {
+        currentIndices.accountNo = i;
+        score += 4;
+        continue;
+      }
+
+      // Check Location / Branch
+      const isLocation = /\b(location|branch|city|place)\b/.test(h);
+      if (isLocation && currentIndices.location === -1) {
+        currentIndices.location = i;
+        score += 2;
+        continue;
+      }
+
+      // Check Bank Name
+      const isBankName = !isAccount && !isLocation && !isIfsc && /\b(bank|b\s*k)\b/.test(h);
+      if (isBankName && currentIndices.bankName === -1) {
+        currentIndices.bankName = i;
+        score += 3;
+        continue;
+      }
+
+      // Check Party / Beneficiary / Employee Name
+      const isName = !isBankName && !isLocation && !isIfsc && !isAccount && !isSrNo && (
+        /\b(particular|particulars|beneficiary|payee|employee|emp\s*name|staff|worker|party|holder|client|vendor|person|name)\b/.test(h)
+      );
+      if (isName && currentIndices.name === -1) {
+        currentIndices.name = i;
+        score += 3;
+        continue;
       }
     }
-    
-    if (colIndices.name !== -1 && colIndices.accountNo !== -1) {
-      headerRow = rowNumber;
+
+    if (score > maxScore && (currentIndices.name !== -1 || currentIndices.accountNo !== -1 || currentIndices.ifsc !== -1)) {
+      maxScore = score;
+      bestHeaderRow = rowNumber;
+      bestColIndices = { ...currentIndices };
     }
   });
-  
-  // Default to standard layout if headers not auto-detected
-  if (!headerRow) {
-    colIndices = { name: 2, bankName: 3, accountNo: 4, location: 5, ifsc: 6 };
+
+  if (bestHeaderRow && maxScore >= 3) {
+    headerRow = bestHeaderRow;
+    colIndices = bestColIndices;
+  } else {
+    // Default fallback indices if no clear headers detected
+    colIndices = { name: 2, bankName: 3, accountNo: 4, location: 5, ifsc: 6, srNo: 1 };
     headerRow = 1;
   }
-  
-  const seenAccountNos = new Set();
-  const seenNameAndAccounts = new Set();
+
+  // Data inspection heuristic fallback if crucial columns were not identified
+  if (colIndices.accountNo === -1 || colIndices.ifsc === -1 || colIndices.name === -1) {
+    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/i;
+    const colStats = {};
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber <= headerRow || rowNumber > headerRow + 10) return;
+      const vals = row.values;
+      if (!vals) return;
+      for (let i = 1; i < vals.length; i++) {
+        const valStr = getCellValueString(vals[i]).trim();
+        if (!valStr) continue;
+        if (!colStats[i]) colStats[i] = { ifscMatches: 0, digitsLenGt8: 0, textOnly: 0, bankKeywords: 0 };
+        if (ifscRegex.test(valStr)) colStats[i].ifscMatches++;
+        if (/^\d{8,20}$/.test(valStr.replace(/[\s-]/g, ''))) colStats[i].digitsLenGt8++;
+        if (/[a-zA-Z]{3,}/.test(valStr) && !/^\d+$/.test(valStr)) colStats[i].textOnly++;
+        if (/\b(sbi|hdfc|icici|axis|punjab|canara|union|bank|kotak|baroda|indusind|idbi|yes|indian)\b/i.test(valStr)) colStats[i].bankKeywords++;
+      }
+    });
+
+    Object.entries(colStats).forEach(([colIdxStr, stats]) => {
+      const idx = parseInt(colIdxStr, 10);
+      if (idx === colIndices.srNo) return;
+      if (colIndices.ifsc === -1 && stats.ifscMatches >= 2) colIndices.ifsc = idx;
+      if (colIndices.accountNo === -1 && stats.digitsLenGt8 >= 2) colIndices.accountNo = idx;
+      if (colIndices.bankName === -1 && stats.bankKeywords >= 2) colIndices.bankName = idx;
+    });
+  }
+
+  // Safety fallback if still missing: ensure accountNo is never assigned to srNo
+  if (colIndices.accountNo === colIndices.srNo && colIndices.accountNo !== -1) {
+    colIndices.accountNo = -1;
+  }
+
+  const seenAccountsInSheet = new Set();
+  const seenNameAndAccountsInSheet = new Set();
+  let inSheetDuplicatesCount = 0;
+  let totalRowsRead = 0;
 
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber <= headerRow) return;
     
     const vals = row.values;
-    if (!vals) return;
+    if (!vals || vals.length === 0) return;
     
-    const name = String(vals[colIndices.name] || '').trim();
-    const bankName = String(vals[colIndices.bankName] || '').trim();
-    const accountNo = String(vals[colIndices.accountNo] || '').trim();
-    const location = String(vals[colIndices.location] || '').trim();
-    const ifsc = String(vals[colIndices.ifsc] || '').trim().toUpperCase();
+    const name = colIndices.name !== -1 ? getCellValueString(vals[colIndices.name]) : '';
+    const bankName = colIndices.bankName !== -1 ? getCellValueString(vals[colIndices.bankName]) : '';
+    const rawAccountNo = colIndices.accountNo !== -1 ? getCellValueString(vals[colIndices.accountNo]) : '';
+    const location = colIndices.location !== -1 ? getCellValueString(vals[colIndices.location]) : '';
+    const ifsc = colIndices.ifsc !== -1 ? getCellValueString(vals[colIndices.ifsc]).toUpperCase() : '';
     
     // Normalize account number and composite key for duplicate detection
-    const normAcct = accountNo.replace(/[\s-]+/g, '').toLowerCase();
+    const normAcct = rawAccountNo.replace(/[\s-]+/g, '').toLowerCase();
     const compositeKey = `${name.toLowerCase()}_${normAcct}`;
     
-    if (name && normAcct) {
-      if (!seenAccountNos.has(normAcct) && !seenNameAndAccounts.has(compositeKey)) {
-        seenAccountNos.add(normAcct);
-        seenNameAndAccounts.add(compositeKey);
-        parties.push({
-          name,
-          bankName: bankName || 'UNKNOWN BANK',
-          accountNo,
-          location: location || 'BRANCH',
-          ifsc: ifsc || ''
-        });
-      }
+    if (!name && !normAcct) return; // Skip empty rows
+    totalRowsRead++;
+
+    // Check if this row is an internal duplicate within the Excel file itself
+    const isDupInSheet = (normAcct && seenAccountsInSheet.has(normAcct)) || 
+                         (normAcct && seenNameAndAccountsInSheet.has(compositeKey)) ||
+                         (!normAcct && name && seenNameAndAccountsInSheet.has(compositeKey));
+
+    if (isDupInSheet) {
+      inSheetDuplicatesCount++;
+      return; // Ignore duplicate row in Excel, continue to next
     }
+
+    if (normAcct) seenAccountsInSheet.add(normAcct);
+    seenNameAndAccountsInSheet.add(compositeKey);
+
+    parties.push({
+      name: name || 'UNKNOWN PAYEE',
+      bankName: bankName || 'UNKNOWN BANK',
+      accountNo: rawAccountNo,
+      location: location || 'BRANCH',
+      ifsc: ifsc || ''
+    });
   });
   
+  parties.inSheetDuplicatesCount = inSheetDuplicatesCount;
+  parties.totalRowsRead = totalRowsRead;
   return parties;
 }
 

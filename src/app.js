@@ -33,17 +33,16 @@ function loadStore(key, defaultValue = []) {
     const raw = localStorage.getItem(key);
     const val = raw ? JSON.parse(raw) : defaultValue;
     if (key === STORE_KEYS.parties && Array.isArray(val)) {
-      // Auto-deduplicate by normalized account number and name
+      // Auto-deduplicate by category and normalized account number/name
       const seen = new Set();
       const uniqueParties = [];
       val.forEach(p => {
         if (!p) return;
+        const cat = p.category || 'material';
         const norm = (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase();
-        if (norm && !seen.has(norm)) {
-          seen.add(norm);
-          uniqueParties.push(p);
-        } else if (!norm && p.name && !seen.has(p.name.trim().toLowerCase())) {
-          seen.add(p.name.trim().toLowerCase());
+        const key = norm ? `${cat}_${norm}` : `${cat}_name_${(p.name || '').trim().toLowerCase()}`;
+        if (!seen.has(key)) {
+          seen.add(key);
           uniqueParties.push(p);
         }
       });
@@ -307,12 +306,12 @@ function findDuplicateCheque(chequeNo, excludeHistoryId = null) {
 const PARTY_CATEGORIES = [
   { id: 'material', label: 'Material & Vendor Bills', shortLabel: 'Material / Bills', icon: '📦' },
   { id: 'employees', label: 'Employees & Staff (Salary)', shortLabel: 'Employees / Staff', icon: '👤' },
-  { id: 'contractors', label: 'Contractors & Services', shortLabel: 'Contractors', icon: '🛠️' },
+  { id: 'family', legacyIds: ['contractors'], label: 'Family & Relatives', shortLabel: 'Family', icon: '👨‍👩‍👧‍👦' },
   { id: 'utilities', label: 'Rent, Utilities & Others', shortLabel: 'Rent / Utilities', icon: '🏢' }
 ];
 
 function getCategoryMeta(catId) {
-  return PARTY_CATEGORIES.find(c => c.id === catId) || PARTY_CATEGORIES[0];
+  return PARTY_CATEGORIES.find(c => c.id === catId || (c.legacyIds && c.legacyIds.includes(catId))) || PARTY_CATEGORIES[0];
 }
 
 function escapeHtml(str) {
@@ -997,7 +996,8 @@ function getFilteredParties() {
   const q = state.search.trim().toLowerCase();
   const cat = state.directoryCategory || 'all';
   return state.parties.filter(p => {
-    const partyCat = p.category || 'material';
+    let partyCat = p.category || 'material';
+    if (partyCat === 'contractors') partyCat = 'family';
     if (cat !== 'all' && partyCat !== cat) return false;
     return !q || p.name.toLowerCase().includes(q) || p.bankName.toLowerCase().includes(q) || p.accountNo.includes(q);
   });
@@ -1014,7 +1014,7 @@ function renderDirectory() {
     all: state.parties.length,
     material: state.parties.filter(p => (p.category || 'material') === 'material').length,
     employees: state.parties.filter(p => p.category === 'employees').length,
-    contractors: state.parties.filter(p => p.category === 'contractors').length,
+    family: state.parties.filter(p => p.category === 'family' || p.category === 'contractors').length,
     utilities: state.parties.filter(p => p.category === 'utilities').length,
   };
 
@@ -1044,9 +1044,9 @@ function renderDirectory() {
         <span>👤 Employees & Staff (Salary)</span>
         <span class="cat-tab-count">${catCounts.employees}</span>
       </button>
-      <button type="button" class="cat-tab-btn ${activeCat === 'contractors' ? 'active' : ''}" data-action="set-directory-category" data-cat="contractors">
-        <span>🛠️ Contractors & Services</span>
-        <span class="cat-tab-count">${catCounts.contractors}</span>
+      <button type="button" class="cat-tab-btn ${activeCat === 'family' ? 'active' : ''}" data-action="set-directory-category" data-cat="family">
+        <span>👨‍👩‍👧‍👦 Family</span>
+        <span class="cat-tab-count">${catCounts.family}</span>
       </button>
       <button type="button" class="cat-tab-btn ${activeCat === 'utilities' ? 'active' : ''}" data-action="set-directory-category" data-cat="utilities">
         <span>🏢 Rent & Utilities</span>
@@ -1209,7 +1209,8 @@ function renderNewRun() {
   const activeRunCat = state.runCategory || 'all';
 
   const filteredRunList = state.parties.filter(p => {
-    const partyCat = p.category || 'material';
+    let partyCat = p.category || 'material';
+    if (partyCat === 'contractors') partyCat = 'family';
     if (activeRunCat !== 'all' && partyCat !== activeRunCat) return false;
     return !q || p.name.toLowerCase().includes(q) || p.bankName.toLowerCase().includes(q);
   });
@@ -1218,7 +1219,7 @@ function renderNewRun() {
     all: state.parties.length,
     material: state.parties.filter(p => (p.category || 'material') === 'material').length,
     employees: state.parties.filter(p => p.category === 'employees').length,
-    contractors: state.parties.filter(p => p.category === 'contractors').length,
+    family: state.parties.filter(p => p.category === 'family' || p.category === 'contractors').length,
     utilities: state.parties.filter(p => p.category === 'utilities').length,
   };
 
@@ -1267,9 +1268,9 @@ function renderNewRun() {
         <span>👤 Employees & Staff (Salary)</span>
         <span class="cat-tab-count">${catCounts.employees}</span>
       </button>
-      <button type="button" class="cat-tab-btn ${activeRunCat === 'contractors' ? 'active' : ''}" data-action="set-run-category" data-cat="contractors">
-        <span>🛠️ Contractors & Services</span>
-        <span class="cat-tab-count">${catCounts.contractors}</span>
+      <button type="button" class="cat-tab-btn ${activeRunCat === 'family' ? 'active' : ''}" data-action="set-run-category" data-cat="family">
+        <span>👨‍👩‍👧‍👦 Family</span>
+        <span class="cat-tab-count">${catCounts.family}</span>
       </button>
       <button type="button" class="cat-tab-btn ${activeRunCat === 'utilities' ? 'active' : ''}" data-action="set-run-category" data-cat="utilities">
         <span>🏢 Rent & Utilities</span>
@@ -3441,20 +3442,20 @@ function attachHandlers() {
       const normAcct = data.accountNo.replace(/[\s-]+/g, '').toLowerCase();
 
       if (id) {
-        // Edit existing party - check if another party already has this account number
-        const duplicate = state.parties.some(p => p.id !== id && (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase() === normAcct);
+        // Edit existing party - check if another party already has this account number in the same category
+        const duplicate = state.parties.some(p => p.id !== id && (p.category || 'material') === data.category && normAcct && (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase() === normAcct);
         if (duplicate) {
-          showToast('Another party with this account number already exists in directory.');
+          showToast(`Another party with this account number already exists in ${getCategoryMeta(data.category).shortLabel}.`);
           return;
         }
         const idx = state.parties.findIndex(p => p.id === id);
         if (idx > -1) state.parties[idx] = { ...state.parties[idx], ...data };
         showToast('Payee updated successfully');
       } else {
-        // Add new party - check if already exists
-        const duplicate = state.parties.some(p => (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase() === normAcct);
+        // Add new party - check if already exists in this category
+        const duplicate = state.parties.some(p => (p.category || 'material') === data.category && normAcct && (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase() === normAcct);
         if (duplicate) {
-          showToast('A party with this account number already exists in directory.');
+          showToast(`A party with this account number already exists in ${getCategoryMeta(data.category).shortLabel}.`);
           return;
         }
         state.parties.push({ id: uid(), ...data });
@@ -3668,29 +3669,12 @@ async function handleExcelUpload(file) {
     if (catSelect) {
       if (/employ|staff|salary|salaries|worker|labour/i.test(fname)) {
         catSelect.value = 'employees';
-      } else if (/contract|service|agency/i.test(fname)) {
-        catSelect.value = 'contractors';
+      } else if (/family|relat|personal|friend|home|house|contract|service|agency/i.test(fname)) {
+        catSelect.value = 'family';
       } else if (/utility|bill|rent|office/i.test(fname)) {
         catSelect.value = 'utilities';
       }
     }
-
-    // Set of existing normalized accounts in directory
-    const existingAccounts = new Set(
-      state.parties.map(p => (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase())
-    );
-
-    const newParties = [];
-    const duplicateParties = [];
-
-    tempParsedParties.forEach(p => {
-      const normAcct = (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase();
-      if (existingAccounts.has(normAcct)) {
-        duplicateParties.push(p);
-      } else {
-        newParties.push(p);
-      }
-    });
 
     const previewList = document.getElementById('import-preview-list');
     const previewBox = document.getElementById('import-preview-box');
@@ -3698,35 +3682,59 @@ async function handleExcelUpload(file) {
     const commitBtn = document.getElementById('commit-import-btn');
     const catBadge = document.getElementById('import-preview-cat-badge');
 
-    const updateCategoryUI = () => {
+    const refreshImportPreview = () => {
       const selectedCat = catSelect ? catSelect.value : 'material';
       const meta = getCategoryMeta(selectedCat);
+
       if (catBadge) {
         catBadge.innerHTML = `Assigning to: <b>${meta.icon} ${escapeHtml(meta.shortLabel)}</b>`;
       }
-      if (commitBtn && newParties.length > 0) {
-        commitBtn.innerText = `Confirm Import (${newParties.length}) to ${meta.shortLabel}`;
-      }
-    };
 
-    if (catSelect) {
-      catSelect.onchange = updateCategoryUI;
-    }
-    
-    if (previewList && previewBox && countLbl && commitBtn) {
+      // Existing accounts in THIS category
+      const existingCategoryParties = state.parties.filter(p => (p.category || 'material') === selectedCat);
+      const existingAccountSet = new Set(
+        existingCategoryParties
+          .map(p => (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase())
+          .filter(Boolean)
+      );
+      const existingNameSet = new Set(
+        existingCategoryParties.map(p => (p.name || '').trim().toLowerCase()).filter(Boolean)
+      );
+
+      const newParties = [];
+      const duplicateCategoryParties = [];
+
+      tempParsedParties.forEach(p => {
+        const normAcct = (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase();
+        const normName = (p.name || '').trim().toLowerCase();
+        const isExistingInCat = normAcct 
+          ? existingAccountSet.has(normAcct) 
+          : (normName && existingNameSet.has(normName));
+
+        if (isExistingInCat) {
+          duplicateCategoryParties.push(p);
+        } else {
+          newParties.push(p);
+        }
+      });
+
+      const inSheetDups = tempParsedParties.inSheetDuplicatesCount || 0;
+
+      if (!previewList || !previewBox || !countLbl || !commitBtn) return;
+
       if (newParties.length === 0) {
         previewList.innerHTML = `
           <div style="padding: 22px 14px; text-align: center; color: var(--secondary-text); font-size: 13.5px; line-height:1.6;">
-            ⚠️ <b>All ${tempParsedParties.length} payees</b> in this sheet already exist in your directory.<br>
-            <span style="font-size:12px; color: var(--accent);">Repeated/duplicate parties were not added.</span>
+            ⚠️ <b>All ${tempParsedParties.length} payees</b> in this sheet already exist in <b>${meta.label}</b>.<br>
+            <span style="font-size:12px; color: var(--accent);">You can change the target category above or upload a new file.</span>
           </div>
         `;
-        countLbl.innerHTML = `<span style="color:var(--accent);">0 new payees (${duplicateParties.length} repeated skipped)</span>`;
+        countLbl.innerHTML = `<span style="color:var(--accent);">0 new payees (${duplicateCategoryParties.length} existing in ${meta.shortLabel} skipped${inSheetDups > 0 ? `, ${inSheetDups} in-sheet dups ignored` : ''})</span>`;
         commitBtn.disabled = true;
         commitBtn.innerText = 'No New Parties to Import';
       } else {
         commitBtn.disabled = false;
-        updateCategoryUI();
+        commitBtn.innerText = `Confirm Import (${newParties.length}) to ${meta.shortLabel}`;
 
         let html = newParties.map(p => `
           <div style="padding: 10px 14px; border-bottom: 1px solid var(--border); font-size:13px; display:flex; justify-content:space-between; align-items:center;">
@@ -3738,29 +3746,32 @@ async function handleExcelUpload(file) {
           </div>
         `).join('');
 
-        if (duplicateParties.length > 0) {
+        if (duplicateCategoryParties.length > 0 || inSheetDups > 0) {
           html += `
             <div style="padding: 10px 14px; background: rgba(239, 68, 68, 0.05); color: var(--secondary-text); font-size: 12px; border-top: 1px dashed var(--border);">
-              ℹ️ <b>${duplicateParties.length} duplicate / existing payee${duplicateParties.length === 1 ? '' : 's'}</b> will be skipped automatically.
+              ${duplicateCategoryParties.length > 0 ? `ℹ️ <b>${duplicateCategoryParties.length} payee${duplicateCategoryParties.length === 1 ? '' : 's'}</b> already exist in ${meta.shortLabel} and will be skipped.<br>` : ''}
+              ${inSheetDups > 0 ? `ℹ️ <b>${inSheetDups} duplicate row${inSheetDups === 1 ? '' : 's'}</b> within the Excel sheet were automatically ignored.` : ''}
             </div>
           `;
         }
 
         previewList.innerHTML = html;
-        countLbl.innerHTML = `Found <b>${newParties.length}</b> new payee${newParties.length === 1 ? '' : 's'} ${duplicateParties.length > 0 ? `<span style="color:var(--secondary-text);">(${duplicateParties.length} repeated skipped)</span>` : ''}`;
+        countLbl.innerHTML = `Found <b>${newParties.length}</b> new payee${newParties.length === 1 ? '' : 's'} ready to import${duplicateCategoryParties.length > 0 ? ` <span style="color:var(--secondary-text);">(${duplicateCategoryParties.length} in ${meta.shortLabel} skipped)</span>` : ''}`;
 
         commitBtn.onclick = () => {
           let added = 0;
-          const currentAccountSet = new Set(
-            state.parties.map(p => (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase())
+          const currentCatAccounts = new Set(
+            state.parties
+              .filter(p => (p.category || 'material') === selectedCat)
+              .map(p => (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase())
+              .filter(Boolean)
           );
-          const selectedCategory = catSelect?.value || 'material';
 
           newParties.forEach(tp => {
             const normAcct = (tp.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase();
-            if (!currentAccountSet.has(normAcct)) {
-              currentAccountSet.add(normAcct);
-              state.parties.push({ id: uid(), category: selectedCategory, ...tp });
+            if (!normAcct || !currentCatAccounts.has(normAcct)) {
+              if (normAcct) currentCatAccounts.add(normAcct);
+              state.parties.push({ id: uid(), category: selectedCat, ...tp });
               added++;
             }
           });
@@ -3768,7 +3779,7 @@ async function handleExcelUpload(file) {
           persistParties();
           state.modal = null;
           if (added > 0) {
-            showToast(`Imported ${added} new unique payees into ${getCategoryMeta(selectedCategory).label}!`);
+            showToast(`Imported ${added} new unique payees into ${meta.label}!`);
           } else {
             showToast('No new unique payees were added.');
           }
@@ -3776,7 +3787,13 @@ async function handleExcelUpload(file) {
         };
       }
       previewBox.style.display = 'block';
+    };
+
+    if (catSelect) {
+      catSelect.onchange = refreshImportPreview;
     }
+
+    refreshImportPreview();
   } catch (err) {
     showToast(`Error parsing file: ${err.message}`);
   }
@@ -3794,13 +3811,19 @@ function handleBackupRestore(file) {
         
         if (Array.isArray(data.parties)) {
           const currentAccounts = new Set(
-            state.parties.map(p => (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase())
+            state.parties.map(p => {
+              const cat = p.category || 'material';
+              const norm = (p.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase();
+              return norm ? `${cat}_${norm}` : `${cat}_name_${(p.name || '').trim().toLowerCase()}`;
+            })
           );
           data.parties.forEach(tp => {
+            const cat = tp.category || 'material';
             const normAcct = (tp.accountNo || '').trim().replace(/[\s-]+/g, '').toLowerCase();
-            if (normAcct && !currentAccounts.has(normAcct)) {
-              currentAccounts.add(normAcct);
-              state.parties.push({ id: uid(), ...tp });
+            const key = normAcct ? `${cat}_${normAcct}` : `${cat}_name_${(tp.name || '').trim().toLowerCase()}`;
+            if (!currentAccounts.has(key)) {
+              currentAccounts.add(key);
+              state.parties.push({ id: uid(), category: cat, ...tp });
               mergedParties++;
             } else {
               skippedParties++;

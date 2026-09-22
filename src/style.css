@@ -2459,10 +2459,11 @@ table tbody tr.row-selected {
   color: #059669;
   border: 1px solid rgba(16, 185, 129, 0.2);
 }
+.cat-badge.cat-family,
 .cat-badge.cat-contractors {
-  background: rgba(79, 70, 229, 0.1);
-  color: #d97706;
-  border: 1px solid rgba(79, 70, 229, 0.25);
+  background: rgba(244, 63, 94, 0.1);
+  color: #e11d48;
+  border: 1px solid rgba(244, 63, 94, 0.25);
 }
 .cat-badge.cat-utilities {
   background: rgba(139, 92, 246, 0.1);
