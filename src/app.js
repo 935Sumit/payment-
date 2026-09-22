@@ -1563,7 +1563,7 @@ function renderNewRun() {
                         <div class="account-picker-info">
                           <div class="account-holder">${escapeHtml(a.holderName)}</div>
                           <div class="account-meta">
-                            ${escapeHtml(a.bankName)} · ${renderAccountWithEye(a.accountNo, a.id)}
+                            ${escapeHtml(a.bankName)}${a.ifsc ? ` · <span class="mono">${escapeHtml(a.ifsc)}</span>` : ''} · ${renderAccountWithEye(a.accountNo, a.id)}
                             ${aChq ? ` · <span style="color:var(--accent); font-weight:600;">Book: #${aChq.startStr}—#${aChq.endStr} (${aChq.remainingLeaves} left)</span>` : ''}
                           </div>
                         </div>
@@ -1809,6 +1809,7 @@ function renderAccounts() {
                 <th>Account Holder Name</th>
                 <th>Bank Name</th>
                 <th>Account Number</th>
+                <th>IFSC Code</th>
                 <th>Cheque Book Series</th>
                 <th>Bank Email</th>
                 <th></th>
@@ -1823,6 +1824,7 @@ function renderAccounts() {
                   <td><strong>${escapeHtml(a.holderName)}</strong></td>
                   <td>${escapeHtml(a.bankName)}</td>
                   <td class="mono">${renderAccountWithEye(a.accountNo, a.id)}</td>
+                  <td class="mono" style="font-weight:600; color:var(--primary-text);">${escapeHtml(a.ifsc || '—')}</td>
                   <td>
                     ${chq ? `
                       <div>
@@ -1872,6 +1874,12 @@ function renderAccounts() {
                     <span class="m-label">Account No</span>
                     <span class="mono">${renderAccountWithEye(a.accountNo, a.id)}</span>
                   </div>
+                  ${a.ifsc ? `
+                    <div class="m-acct-row">
+                      <span class="m-label">IFSC Code</span>
+                      <span class="mono" style="font-weight:600;">${escapeHtml(a.ifsc)}</span>
+                    </div>
+                  ` : ''}
                   ${a.bankEmail ? `
                     <div class="m-acct-row">
                       <span class="m-label">Bank Email</span>
@@ -2324,7 +2332,7 @@ function renderDuplicateChequeConfirmModal(payload) {
 
 function renderAccountFormModal(payload) {
   const editing = !!payload;
-  const a = payload || { holderName: '', bankName: '', accountNo: '', bankEmail: '', chequeBookStart: '', chequeBookEnd: '' };
+  const a = payload || { holderName: '', bankName: '', accountNo: '', ifsc: '', bankEmail: '', chequeBookStart: '', chequeBookEnd: '' };
   return `
     <div class="modal-backdrop" data-action="close-modal">
       <div class="modal" data-stop>
@@ -2344,10 +2352,14 @@ function renderAccountFormModal(payload) {
                 <input type="text" name="bankName" required placeholder="e.g. Union Bank of India" value="${escapeHtml(a.bankName)}">
               </div>
               <div class="field">
-                <label>Bank Account Number</label>
-                <input type="text" name="accountNo" required placeholder="e.g. SOD # 107021048004036" value="${escapeHtml(a.accountNo)}">
+                <label>IFSC Code (Optional)</label>
+                <input type="text" name="ifsc" placeholder="e.g. UBIN0531073" value="${escapeHtml(a.ifsc || '')}" style="text-transform:uppercase;">
               </div>
-              <div class="field full">
+              <div class="field">
+                <label>Bank Account Number</label>
+                <input type="text" name="accountNo" required placeholder="e.g. 107021048004036" value="${escapeHtml(a.accountNo)}">
+              </div>
+              <div class="field">
                 <label>Bank Email (for sending voucher files)</label>
                 <input type="email" name="bankEmail" placeholder="e.g. branchmanager@unionbank.com" value="${escapeHtml(a.bankEmail || '')}">
               </div>
@@ -3476,6 +3488,7 @@ function attachHandlers() {
         holderName: fd.get('holderName').trim(),
         bankName: fd.get('bankName').trim(),
         accountNo: fd.get('accountNo').trim(),
+        ifsc: (fd.get('ifsc') || '').trim().toUpperCase(),
         bankEmail: fd.get('bankEmail').trim(),
         chequeBookStart: fd.get('chequeBookStart') ? fd.get('chequeBookStart').trim() : '',
         chequeBookEnd: fd.get('chequeBookEnd') ? fd.get('chequeBookEnd').trim() : '',

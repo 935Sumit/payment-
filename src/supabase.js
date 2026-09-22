@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS public.my_accounts (
     holder_name TEXT NOT NULL,
     bank_name TEXT NOT NULL,
     account_no TEXT NOT NULL,
+    ifsc TEXT DEFAULT '',
     bank_email TEXT DEFAULT '',
     cheque_book_start TEXT DEFAULT '',
     cheque_book_end TEXT DEFAULT '',
@@ -210,6 +211,7 @@ function accountToRow(a) {
     holder_name: a.holderName || '',
     bank_name: a.bankName || '',
     account_no: a.accountNo || '',
+    ifsc: (a.ifsc || '').trim().toUpperCase(),
     bank_email: a.bankEmail || '',
     cheque_book_start: a.chequeBookStart || '',
     cheque_book_end: a.chequeBookEnd || '',
@@ -223,6 +225,7 @@ function rowToAccount(r) {
     holderName: r.holder_name || '',
     bankName: r.bank_name || '',
     accountNo: r.account_no || '',
+    ifsc: r.ifsc || '',
     bankEmail: r.bank_email || '',
     chequeBookStart: r.cheque_book_start || '',
     chequeBookEnd: r.cheque_book_end || ''
