@@ -1810,38 +1810,17 @@ function renderAccounts() {
                 <th>Bank Name</th>
                 <th>Account Number</th>
                 <th>IFSC Code</th>
-                <th>Cheque Book Series</th>
                 <th>Bank Email</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              ${state.myAccounts.map(a => {
-                const chq = getChequeBookInfo(a);
-                const pct = chq && chq.totalLeaves > 0 ? (chq.usedCount / chq.totalLeaves) * 100 : 0;
-                return `
+              ${state.myAccounts.map(a => `
                 <tr>
                   <td><strong>${escapeHtml(a.holderName)}</strong></td>
                   <td>${escapeHtml(a.bankName)}</td>
                   <td class="mono">${renderAccountWithEye(a.accountNo, a.id)}</td>
                   <td class="mono" style="font-weight:600; color:var(--primary-text);">${escapeHtml(a.ifsc || '—')}</td>
-                  <td>
-                    ${chq ? `
-                      <div>
-                        <div style="font-weight:600; font-family:'SFMono-Regular',Consolas,monospace; font-size:12.5px; color:var(--primary-text);">
-                          #${escapeHtml(chq.startStr)} — #${escapeHtml(chq.endStr)}
-                        </div>
-                        <div style="font-size:11.5px; color:var(--secondary-text); margin-top:2px;">
-                          ${chq.usedCount}/${chq.totalLeaves} used · <b>${chq.remainingLeaves} left</b>
-                        </div>
-                        <div class="chq-mini-progress">
-                          <div class="chq-mini-bar ${chq.isOutOfLeaves ? 'danger' : (chq.isNearEnd ? 'warning' : '')}" style="width:${pct}%;"></div>
-                        </div>
-                      </div>
-                    ` : `
-                      <span style="color:var(--secondary-text); font-size:12.5px;">— No series set</span>
-                    `}
-                  </td>
                   <td>${escapeHtml(a.bankEmail || '—')}</td>
                   <td>
                     <div class="row-actions">
@@ -1850,61 +1829,46 @@ function renderAccounts() {
                     </div>
                   </td>
                 </tr>
-              `;}).join('')}
+              `).join('')}
             </tbody>
           </table>
         </div>
 
         <!-- Mobile Accounts Cards View (No horizontal scroll!) -->
         <div class="mobile-only mobile-cards-list" style="padding: 10px 12px 14px;">
-          ${state.myAccounts.map(a => {
-            const chq = getChequeBookInfo(a);
-            const pct = chq && chq.totalLeaves > 0 ? (chq.usedCount / chq.totalLeaves) * 100 : 0;
-            return `
-              <div class="mobile-account-card">
-                <div class="m-acct-head">
-                  <div>
-                    <h4 class="m-acct-name">${escapeHtml(a.holderName)}</h4>
-                    <div class="m-acct-bank">${escapeHtml(a.bankName)}</div>
-                  </div>
-                  <div class="icon-bubble">${ICONS.bank}</div>
+          ${state.myAccounts.map(a => `
+            <div class="mobile-account-card">
+              <div class="m-acct-head">
+                <div>
+                  <h4 class="m-acct-name">${escapeHtml(a.holderName)}</h4>
+                  <div class="m-acct-bank">${escapeHtml(a.bankName)}</div>
                 </div>
-                <div class="m-acct-body">
-                  <div class="m-acct-row">
-                    <span class="m-label">Account No</span>
-                    <span class="mono">${renderAccountWithEye(a.accountNo, a.id)}</span>
-                  </div>
-                  ${a.ifsc ? `
-                    <div class="m-acct-row">
-                      <span class="m-label">IFSC Code</span>
-                      <span class="mono" style="font-weight:600;">${escapeHtml(a.ifsc)}</span>
-                    </div>
-                  ` : ''}
-                  ${a.bankEmail ? `
-                    <div class="m-acct-row">
-                      <span class="m-label">Bank Email</span>
-                      <span>${escapeHtml(a.bankEmail)}</span>
-                    </div>
-                  ` : ''}
-                  ${chq ? `
-                    <div class="m-acct-chq-box" style="margin-top:4px; padding-top:6px; border-top:1px dashed var(--border);">
-                      <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
-                        <span>Series: <b>#${escapeHtml(chq.startStr)}—#${escapeHtml(chq.endStr)}</b></span>
-                        <span style="color:var(--accent); font-weight:700;">${chq.remainingLeaves} leaves left</span>
-                      </div>
-                      <div class="chq-mini-progress" style="width:100%;">
-                        <div class="chq-mini-bar ${chq.isOutOfLeaves ? 'danger' : (chq.isNearEnd ? 'warning' : '')}" style="width:${pct}%;"></div>
-                      </div>
-                    </div>
-                  ` : ''}
-                </div>
-                <div class="mobile-card-actions">
-                  <button class="btn btn-sm btn-ghost" data-action="edit-account" data-id="${a.id}">${ICONS.edit} Edit</button>
-                  <button class="btn btn-sm btn-danger-ghost" data-action="delete-account" data-id="${a.id}">${ICONS.trash} Delete</button>
-                </div>
+                <div class="icon-bubble">${ICONS.bank}</div>
               </div>
-            `;
-          }).join('')}
+              <div class="m-acct-body">
+                <div class="m-acct-row">
+                  <span class="m-label">Account No</span>
+                  <span class="mono">${renderAccountWithEye(a.accountNo, a.id)}</span>
+                </div>
+                ${a.ifsc ? `
+                  <div class="m-acct-row">
+                    <span class="m-label">IFSC Code</span>
+                    <span class="mono" style="font-weight:600;">${escapeHtml(a.ifsc)}</span>
+                  </div>
+                ` : ''}
+                ${a.bankEmail ? `
+                  <div class="m-acct-row">
+                    <span class="m-label">Bank Email</span>
+                    <span>${escapeHtml(a.bankEmail)}</span>
+                  </div>
+                ` : ''}
+              </div>
+              <div class="mobile-card-actions">
+                <button class="btn btn-sm btn-ghost" data-action="edit-account" data-id="${a.id}">${ICONS.edit} Edit</button>
+                <button class="btn btn-sm btn-danger-ghost" data-action="delete-account" data-id="${a.id}">${ICONS.trash} Delete</button>
+              </div>
+            </div>
+          `).join('')}
         </div>
       `}
     </div>
@@ -2362,23 +2326,6 @@ function renderAccountFormModal(payload) {
               <div class="field">
                 <label>Bank Email (for sending voucher files)</label>
                 <input type="email" name="bankEmail" placeholder="e.g. branchmanager@unionbank.com" value="${escapeHtml(a.bankEmail || '')}">
-              </div>
-
-              <div class="field full" style="margin-top:6px; padding-top:14px; border-top:1px dashed var(--border);">
-                <div style="font-size:13.5px; font-weight:700; color:var(--primary-text); margin-bottom:4px;">
-                  🔢 Cheque Book Series Tracking (Optional)
-                </div>
-                <div style="font-size:12.5px; color:var(--secondary-text); margin-bottom:12px; line-height:1.4;">
-                  Enter the start and end cheque leaf numbers from your physical chequebook to enable automatic sequential auto-fill and duplicate number warnings.
-                </div>
-              </div>
-              <div class="field">
-                <label>Cheque Book Start No.</label>
-                <input type="text" name="chequeBookStart" placeholder="e.g. 291381" value="${escapeHtml(a.chequeBookStart || '')}">
-              </div>
-              <div class="field">
-                <label>Cheque Book End No.</label>
-                <input type="text" name="chequeBookEnd" placeholder="e.g. 291400" value="${escapeHtml(a.chequeBookEnd || '')}">
               </div>
             </div>
             <div class="form-actions">
